@@ -11,7 +11,7 @@ import productDetail from "./routes/product.routes.js";
 dotenv.config()
 const app = express();
 
-const allowedOrigins = ["https://quecompro.onrender.com/"]; // 
+const allowedOrigins = ["https://que-compro-frontend.onrender.com/"]; // 
 app.use(cors({ 
   origin: allowedOrigins,   // no usar "*"
   credentials: true,        // permite enviar cookies / headers auth
