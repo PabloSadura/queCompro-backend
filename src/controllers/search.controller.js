@@ -9,11 +9,12 @@ export default async function handleSearchStream(req, res) {
     const geoData = await getGeoLocation(ip);
     const countryCode = geoData.countryCode.toLowerCase();
     const languageCode = (countryCode === "ar" || countryCode === "es") ? "es" : "en";
-    const currency = req.query.currency || (countryCode === "ar" ? "ARS" : countryCode === "mx" ? "MXN" : "USD");
+    const currency = 'ARS';
     const userQuery = req.query.query;
     const minPrice = Number(req.query.minPrice);
     const maxPrice = Number(req.query.maxPrice);
     const userId = req.user?.uid;
+
 
     if (!userQuery || !userId) {
         return res.status(400).json({ error: "Missing query or userId" });
