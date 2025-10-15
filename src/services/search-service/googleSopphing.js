@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config(); // Cargar variables de entorno
 
 const CACHE_EXPIRATION_TIME = 3600; // 1 hora en segundos
-const RATING_FILTER_TBS = "mr:1,rt:4"; 
+let RATING_FILTER_TBS = "mr:1,rt:4"; 
 
 /**
  * Busca productos en Google Shopping.
