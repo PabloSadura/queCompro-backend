@@ -44,7 +44,6 @@ export async function fetchGoogleShoppingResults(userId, userQuery, countryCode,
         gl: countryCode || 'ar',
         hl: languageCode || 'es',
         currency: currency || 'ARS',
-        num: 100,
         tbs: RATING_FILTER_TBS,
         api_key: process.env.SERPAPI_KEY1,
     };

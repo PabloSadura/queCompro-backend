@@ -16,9 +16,6 @@ export default async function handleSearchStream(req, res) {
     const maxPrice = Number(req.query.maxPrice);
     const userId = req.user?.uid;
 
-    console.log(currency);
-    
-
     if (!userQuery || !userId) {
         return res.status(400).json({ error: "Missing query or userId" });
     }
