@@ -4,14 +4,12 @@ import { getBestRecommendationFromGemini } from "../services/search-service/gemi
 import { getGeoLocation } from "./aiApi.controller.js";
 import logicFusion from "./logis.controller.js";
 
-
-
 export default async function handleSearchStream(req, res) {
     const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
     const geoData = await getGeoLocation(ip);
     const countryCode = geoData.countryCode.toLowerCase();
     const languageCode = (countryCode === "ar" || countryCode === "es") ? "es" : "en";
-    const currency = geoData.currency;
+    const currency = req.query.currency || (countryCode === "ar" ? "ARS" : countryCode === "mx" ? "MXN" : "USD");
     const userQuery = req.query.query;
     const minPrice = Number(req.query.minPrice);
     const maxPrice = Number(req.query.maxPrice);
