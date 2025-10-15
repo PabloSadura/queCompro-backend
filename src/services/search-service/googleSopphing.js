@@ -31,13 +31,20 @@ export async function fetchGoogleShoppingResults(userId, userQuery, countryCode,
     //     console.error("❌ Error al acceder a Redis, procediendo sin caché:", err);
     // }
 
+    if (minPrice && !isNaN(minPrice)) {
+        RATING_FILTER_TBS += `,p_ord:pmin${minPrice}`; // Añade precio mínimo
+    }
+    if (maxPrice && !isNaN(maxPrice)) {
+        RATING_FILTER_TBS += `,p_ord:pmax${maxPrice}`; // Añade precio máximo
+    }
+
     const params = {
         engine: "google_shopping",
         q: userQuery,
         gl: countryCode || 'ar',
         hl: languageCode || 'es',
         currency: currency || 'ARS',
-        num: 20,
+        num: 100,
         tbs: RATING_FILTER_TBS,
         api_key: process.env.SERPAPI_KEY1,
     };
