@@ -2,7 +2,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
 import geminiPrompt from "../../config/geminiPrompt.js";
-import client from "../../config/redis.js"; // Importar el cliente de Redis
 dotenv.config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -29,15 +28,15 @@ export async function getBestRecommendationFromGemini(userQuery, shoppingResults
   // Crear una clave de caché única basada en la consulta y los resultados
   const cacheKey = `gemini:recommendation:${userQuery}:${JSON.stringify(shoppingResults)}`;
 
-  try {
-    const cachedData = await client.get(cacheKey);
-    if (cachedData) {
-      console.log("✅ Usando recomendación de IA desde caché para:", userQuery);
-      return JSON.parse(cachedData);
-    }
-  } catch (err) {
-    console.error("❌ Error al acceder a Redis, procediendo sin caché:", err);
-  }
+  // try {
+  //   const cachedData = await client.get(cacheKey);
+  //   if (cachedData) {
+  //     console.log("✅ Usando recomendación de IA desde caché para:", userQuery);
+  //     return JSON.parse(cachedData);
+  //   }
+  // } catch (err) {
+  //   console.error("❌ Error al acceder a Redis, procediendo sin caché:", err);
+  // }
 
   const prompt = geminiPrompt(shoppingResults, userQuery);
 
@@ -50,11 +49,11 @@ export async function getBestRecommendationFromGemini(userQuery, shoppingResults
     const recommendation = JSON.parse(sanitizeGeminiResponse(text));
 
     // Guardar la nueva recomendación en la caché
-    try {
-      client.set(cacheKey, JSON.stringify(recommendation), { EX: CACHE_EXPIRATION_TIME });
-    } catch (cacheErr) {
-      console.error("❌ Error al guardar recomendación de IA en Redis:", cacheErr);
-    }
+    // try {
+    //   client.set(cacheKey, JSON.stringify(recommendation), { EX: CACHE_EXPIRATION_TIME });
+    // } catch (cacheErr) {
+    //   console.error("❌ Error al guardar recomendación de IA en Redis:", cacheErr);
+    // }
 
     return recommendation;
 
