@@ -7,7 +7,8 @@ import logicFusion from "./logis.controller.js";
 export default async function handleSearchStream(req, res) {
     const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
     const geoData = await getGeoLocation(ip);
-    const countryCode = geoData.countryCode.toLowerCase();
+    const countryCode= 'ar'
+    // const countryCode = geoData.countryCode.toLowerCase();
     const languageCode = (countryCode === "ar" || countryCode === "es") ? "es" : "en";
     const currency = 'ARS';
     const userQuery = req.query.query;
@@ -15,6 +16,8 @@ export default async function handleSearchStream(req, res) {
     const maxPrice = Number(req.query.maxPrice);
     const userId = req.user?.uid;
 
+    console.log(currency);
+    
 
     if (!userQuery || !userId) {
         return res.status(400).json({ error: "Missing query or userId" });
