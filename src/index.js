@@ -9,9 +9,12 @@ import productDetail from "./routes/product.routes.js";
 
 
 dotenv.config()
+
 const app = express();
 
-const allowedOrigins = [process.env.FRONTEND_URL]; // 
+const allowedOrigins = [process.env.FRONTEND_URL || 'http://localhost:4200'];
+
+// Middlewares
 app.use(cors({ 
   origin: allowedOrigins,   // no usar "*"
   credentials: true,        // permite enviar cookies / headers auth
