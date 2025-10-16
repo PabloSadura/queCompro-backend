@@ -12,6 +12,7 @@ dotenv.config()
 
 const app = express();
 
+//const allowedOrigins = 'http://localhost:4200';
 const allowedOrigins = [process.env.FRONTEND_URL || 'http://localhost:4200'];
 
 // Middlewares
