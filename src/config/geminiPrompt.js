@@ -56,32 +56,9 @@
                       "product_id": "string (usar exactamente el 'product_id' del producto original)",
                       "pros": ["ventaja técnica diferencial 1", "ventaja técnica diferencial 2", "..."],
                       "contras": ["limitación técnica o de diseño", "aspecto donde el competidor es superior", "duda por falta de reseñas"]
+                      "isRecommended": boolean //  true para el producto recomendado, false para los demás,
                     },
-                    {
-                      "product_id": "string",
-                      "pros": ["..."],
-                      "contras": ["..."]
-                    },
-                    {
-                      "product_id": "string",
-                      "pros": ["..."],
-                      "contras": ["..."]
-                    },
-                      {
-                      "product_id": "string",
-                      "pros": ["..."],
-                      "contras": ["..."]
-                    },
-                    {
-                      "product_id": "string",
-                      "pros": ["..."],
-                      "contras": ["..."]
-                    },
-                    {
-                      "product_id": "string",
-                      "pros": ["..."],
-                      "contras": ["..."]
-                    },
+                    {... 5 objetos más ...}
                   ],
                   "recomendacion_final": "string (Declaración directa que debe iniciar con: 'Según mi análisis, yo compraría [Nombre o Modelo del Producto] debido a que [Justificación técnica concisa].')"
                 }
@@ -90,6 +67,7 @@
             2.  **Reglas de Estructura:**
                 * "productos_analisis" debe contener **exactamente 6 objetos**.
                 * Utiliza el **product\_id** del producto de Google Shopping.
+                * **Exactamente UNO** de los productos en "productos_analisis" debe tener **"isRecommended": true**. Los otros cinco deben tener **"isRecommended": false**.
                 * La **"recomendacion\_final"** debe ser una **elección de compra única y justificada**, como si la estuvieras realizando tú mismo como analista.
             
             **COMIENZA TU RESPUESTA JSON AHORA.**

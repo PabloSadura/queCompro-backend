@@ -20,6 +20,7 @@
                     ...originalProductData, 
                     pros: analisisItem.pros || [],
                     contras: analisisItem.contras || [],
+                    isRecomended: analisisItem.isRecommended || false,
                 })
             } else {
                 console.warn(`Producto no encontrado en el mapa con ID: ${analisisItem.product_id}`);
