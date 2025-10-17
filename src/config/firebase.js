@@ -28,4 +28,8 @@ try {
   process.exit(1);
 }
 
+const db = admin.firestore();
+
+export { db };
+
 export default admin;
