@@ -1,35 +1,39 @@
-import admin from "../config/firebase.js";
+import { db } from "../config/firebase.js";
+import NodeCache from "node-cache";
 
-/**
- * Obtiene el historial de búsquedas de un usuario, incluyendo los productos
- * de la subcolección correspondiente a cada búsqueda.
- */
+const historyCache = new NodeCache({ stdTTL: 300, checkperiod: 120 });
+
+
 async function getUserHistory(req, res) {
-  try {    
+  try {
     const userId = req.user?.uid;
     if (!userId) {
       return res.status(401).json({ error: "No autorizado" });
     }
-    
-    // 1. Obtener los documentos principales de las búsquedas del usuario.
-    const searchesSnapshot = await admin.firestore().collection(process.env.FIRESTORE_COLLECTION)
-        .where("userId", "==", userId)
-        .orderBy("createdAt", "desc")
-        .get();
 
-    // 2. Para cada búsqueda, crear una promesa que también obtenga los productos de su subcolección.
+    // 2. Intentamos obtener el historial desde la caché usando el userId como clave.
+    const cachedHistory = historyCache.get(userId);
+    if (cachedHistory) {
+      console.log(`[Cache Hit] Devolviendo historial para el usuario: ${userId}`);
+      return res.json(cachedHistory);
+    }
+
+    // 3. Si no está en la caché (cache miss), procedemos a buscar en Firestore.
+    console.log(`[Cache Miss] Buscando historial en Firestore para el usuario: ${userId}`);
+    const searchesSnapshot = await db.collection(process.env.FIRESTORE_COLLECTION)
+      .where("userId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .get();
+
     const historyPromises = searchesSnapshot.docs.map(async (doc) => {
       const searchData = doc.data();
-      
-      // 3. Obtener los documentos de la subcolección 'productos'.
       const productsSnapshot = await doc.ref.collection(process.env.FIRESTORE_PRODUCTS_COLLECTION).get();
       const productos = productsSnapshot.docs.map(productDoc => productDoc.data());
 
-      // 4. Construir el objeto de historial completo que el frontend espera.
       return {
         id: doc.id,
         query: searchData.query || "",
-        createdAt: searchData.createdAt.toDate(), // Convertir Timestamp a Date
+        createdAt: searchData.createdAt.toDate(),
         result: {
           productos: productos || [],
           recomendacion_final: searchData.recomendacion_final || "No hay recomendación disponible",
@@ -38,8 +42,10 @@ async function getUserHistory(req, res) {
       };
     });
 
-    // 5. Esperar a que todas las búsquedas y sus subcolecciones se resuelvan.
     const userHistory = await Promise.all(historyPromises);
+    
+    // 4. Guardamos el resultado obtenido de Firestore en la caché para la próxima vez.
+    historyCache.set(userId, userHistory);
     
     res.json(userHistory);
 
@@ -50,3 +56,6 @@ async function getUserHistory(req, res) {
 }
 
 export default getUserHistory;
+
+    
+
