@@ -21,6 +21,7 @@
     "firebase-admin": "^13.5.0",
     "geoip-lite": "^1.4.10",
     "jsonc-parser": "^3.3.1",
+    "node-cache": "^5.1.2",
     "redis": "^5.8.2",
     "serpapi": "^2.2.1",
     "string-similarity": "^4.0.4"
@@ -29,7 +30,7 @@
     "chai": "^4.3.7",
     "mocha": "^10.2.0",
     "nodemon": "^3.0.2",
-    "supertest": "^6.3.3",
-    "sinon": "^15.2.0"
+    "sinon": "^15.2.0",
+    "supertest": "^6.3.3"
   }
 }
