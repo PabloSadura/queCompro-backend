@@ -3,26 +3,55 @@ import { fetchGoogleShoppingResults } from '../services/search-service/googleSop
 import logicFusion from './logis.controller.js';
 import axios from 'axios';
 
-// --- DEBES CONFIGURAR ESTAS VARIABLES EN TU .env ---
+// --- DEBES CONFIGURAR ESTAS VARIABLES EN TU .env Y EN RENDER ---
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
-const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
 /**
- * Función para enviar un mensaje de texto de vuelta al usuario.
+ * Normaliza un número de teléfono para la API de WhatsApp,
+ * especialmente para casos como los móviles de Argentina.
+ * @param {string} phone - El número de teléfono a normalizar.
+ * @returns {string} El número de teléfono normalizado.
+ */
+function normalizePhoneNumber(phone) {
+  // Si es un número de Argentina (empieza con 54), tiene 12 dígitos (ej. 5411... sin el 9)
+  // y no empieza ya con 549, le añadimos el 9.
+  if (phone.startsWith('54') && phone.length === 12 && !phone.startsWith('549')) {
+    console.log(`[Phone Normalization] Corrigiendo número de Argentina: ${phone}`);
+    return '549' + phone.substring(2);
+  }
+  return phone;
+}
+
+/**
+ * Función para enviar un mensaje de texto de vuelta al usuario, ahora con logging detallado.
  */
 async function sendWhatsAppMessage(to, text) {
+  const recipientNumber = normalizePhoneNumber(to);
+
+  const requestBody = {
+    messaging_product: "whatsapp",
+    to: recipientNumber,
+    type: "text",
+    text: { body: text },
+  };
+
+  const headers = { 
+    'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+    'Content-Type': 'application/json'
+  };
+
+  console.log(`[WhatsApp Send] Intentando enviar mensaje a: ${recipientNumber}`);
+  console.log(`[WhatsApp Send] Body:`, JSON.stringify(requestBody, null, 2));
+
   try {
-    await axios.post(WHATSAPP_API_URL, {
-      messaging_product: "whatsapp",
-      to: to,
-      type: "text",
-      text: { body: text },
-    }, {
-      headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
-    });
+    await axios.post(WHATSAPP_API_URL, requestBody, { headers });
+    console.log(`[WhatsApp Send] Mensaje enviado exitosamente a ${recipientNumber}`);
   } catch (error) {
-    console.error("Error al enviar mensaje de WhatsApp:", error.response?.data || error.message);
+    // Este log es crucial. Muestra el error exacto que devuelve Meta.
+    console.error("❌ Error al enviar mensaje de WhatsApp. Respuesta de Meta:", error.response?.data || error.message);
   }
 }
 
@@ -32,7 +61,6 @@ async function sendWhatsAppMessage(to, text) {
 export async function handleWhatsAppWebhook(req, res) {
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
-  // Si no es un mensaje de texto o es un mensaje de estado, lo ignoramos.
   if (!message || message.type !== 'text') {
     return res.sendStatus(200);
   }
@@ -43,12 +71,9 @@ export async function handleWhatsAppWebhook(req, res) {
   console.log(`Mensaje recibido de ${userPhone}: "${userQuery}"`);
 
   try {
-    // 1. Envía un mensaje de confirmación inmediato al usuario.
     await sendWhatsAppMessage(userPhone, `¡Hola! 👋 Recibí tu búsqueda: "${userQuery}". Dame un momento mientras analizo las mejores opciones para ti...`);
 
-    // 2. Reutiliza tu lógica de búsqueda y análisis de IA.
-    // (Aquí usamos valores por defecto para simplificar, pero podrías usar IA para extraer precios, etc.)
-    const { products: shoppingResults, totalResults } = await fetchGoogleShoppingResults(null, userQuery, 'ar', 'es', 'ARS');
+    const { products: shoppingResults } = await fetchGoogleShoppingResults(null, userQuery, 'ar', 'es', 'ARS');
     if (!shoppingResults || shoppingResults.length === 0) {
       await sendWhatsAppMessage(userPhone, "Lo siento, no encontré productos para tu búsqueda. ¿Podrías intentar con otros términos?");
       return res.sendStatus(200);
@@ -57,7 +82,6 @@ export async function handleWhatsAppWebhook(req, res) {
     const aiAnalysis = await getBestRecommendationFromGemini(userQuery, shoppingResults);
     const productosRecomendados = logicFusion(shoppingResults, aiAnalysis);
 
-    // 3. Formatea la respuesta para WhatsApp.
     let responseText = `🤖 *Análisis Completado para "${userQuery}"*\n\n`;
     responseText += `*Recomendación de la IA:* ${aiAnalysis.recomendacion_final}\n\n`;
     responseText += "Aquí están las mejores opciones que encontré:\n\n";
@@ -69,7 +93,6 @@ export async function handleWhatsAppWebhook(req, res) {
       responseText += `Ver más: ${prod.product_link}\n\n`;
     });
 
-    // 4. Envía la respuesta final al usuario.
     await sendWhatsAppMessage(userPhone, responseText);
     
     res.sendStatus(200);
@@ -82,12 +105,23 @@ export async function handleWhatsAppWebhook(req, res) {
 }
 
 /**
- * Verificación del Webhook (requerido por Meta una sola vez).
+ * Verificación del Webhook (requerido por Meta una sola vez), ahora con logging.
  */
 export function verifyWhatsAppWebhook(req, res) {
-  if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === VERIFY_TOKEN) {
-    res.status(200).send(req.query['hub.challenge']);
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  console.log('[Webhook Verification] Intentando verificar...');
+  console.log(`[Webhook Verification] Token recibido: ${token}`);
+  console.log(`[Webhook Verification] Token esperado: ${VERIFY_TOKEN}`);
+
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+    console.log('[Webhook Verification] ¡Éxito! Los tokens coinciden. Respondiendo al challenge.');
+    res.status(200).send(challenge);
   } else {
+    console.error('[Webhook Verification] ¡ERROR! Los tokens no coinciden o el modo no es "subscribe".');
     res.sendStatus(403);
   }
 }
+
