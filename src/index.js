@@ -5,7 +5,8 @@ import searchRoutes from "./routes/search.routes.js";
 import historyRoutes from "./routes/history.routes.js";
 import geoLocation from "./routes/geo.routes.js";
 import productDetail from "./routes/product.routes.js";
-import { handleWhatsAppWebhook, verifyWhatsAppWebhook } from "./controllers/whatsapp.controller.js";
+import whatsappRoutes from "./routes/whatsapp.routes.js";
+
 
 
 
@@ -30,8 +31,8 @@ app.use("/api/history", historyRoutes);
 app.use("/api/geo", geoLocation);
 app.use("/api/product", productDetail)
 
-app.use('/api/verifywhatsapp',verifyWhatsAppWebhook)
-app.use('/api/handlerwhatsapp',handleWhatsAppWebhook)
+app.use('/api/whatsapp-webhook',whatsappRoutes)
+
 
 
 app.use((err, req, res, next) => {
