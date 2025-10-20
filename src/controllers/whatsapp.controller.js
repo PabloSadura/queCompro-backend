@@ -20,7 +20,7 @@ function normalizePhoneNumber(phone) {
   // y no empieza ya con 549, le añadimos el 9.
   if (phone.startsWith('54') && phone.length === 12 && !phone.startsWith('549')) {
     console.log(`[Phone Normalization] Corrigiendo número de Argentina: ${phone}`);
-    return '549' + phone.substring(2);
+    return '+54' + phone.substring(2);
   }
   return phone;
 }
