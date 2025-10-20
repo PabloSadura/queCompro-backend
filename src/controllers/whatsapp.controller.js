@@ -1,4 +1,4 @@
-import { getBestRecommendationFromAI } from '../services/search-service/aiService.js';
+import { getBestRecommendationFromGemini } from '../services/search-service/geminiService.js';
 import { fetchGoogleShoppingResults } from '../services/search-service/googleSopphing.js';
 import logicFusion from './logis.controller.js';
 import axios from 'axios';
@@ -54,7 +54,7 @@ export async function handleWhatsAppWebhook(req, res) {
       return res.sendStatus(200);
     }
 
-    const aiAnalysis = await getBestRecommendationFromAI(userQuery, shoppingResults);
+    const aiAnalysis = await getBestRecommendationFromGemini(userQuery, shoppingResults);
     const productosRecomendados = logicFusion(shoppingResults, aiAnalysis);
 
     // 3. Formatea la respuesta para WhatsApp.

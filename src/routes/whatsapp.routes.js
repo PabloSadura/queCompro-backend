@@ -1,5 +1,5 @@
 import {Router} from 'express'
-import { verifyWhatsAppWebhook, handleWhatsAppWebhook } from '../controllers/whatsapp.controller'
+import { verifyWhatsAppWebhook, handleWhatsAppWebhook } from '../controllers/whatsapp.controller.js'
 
 const route = Router()
 
