@@ -1,4 +1,4 @@
-import { getBestRecommendationFromGemini } from '../services/search-service/geminiService.js';
+import { getBestRecommendationFromAI } from '../services/search-service/aiService.js';
 import { fetchGoogleShoppingResults } from '../services/search-service/googleSopphing.js';
 import logicFusion from './logis.controller.js';
 import axios from 'axios';
@@ -11,16 +11,16 @@ const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMB
 
 /**
  * Normaliza un número de teléfono para la API de WhatsApp,
- * especialmente para casos como los móviles de Argentina.
+ * eliminando el '9' de los números móviles de Argentina si está presente.
  * @param {string} phone - El número de teléfono a normalizar.
  * @returns {string} El número de teléfono normalizado.
  */
 function normalizePhoneNumber(phone) {
-  // Si es un número de Argentina (empieza con 54), tiene 12 dígitos (ej. 5411... sin el 9)
-  // y no empieza ya con 549, le añadimos el 9.
-  if (phone.startsWith('54') && phone.length === 12 && !phone.startsWith('549')) {
-    console.log(`[Phone Normalization] Corrigiendo número de Argentina: ${phone}`);
-    return '+54' + phone.substring(2);
+  // Si es un número de Argentina que incluye el '9' para móviles (ej. 549...)
+  if (phone.startsWith('549') && phone.length === 13) {
+    console.log(`[Phone Normalization] Removiendo el '9' del número móvil de Argentina: ${phone}`);
+    // Se quita el '9' uniendo '54' con el resto del número.
+    return '54' + phone.substring(3);
   }
   return phone;
 }
@@ -79,7 +79,7 @@ export async function handleWhatsAppWebhook(req, res) {
       return res.sendStatus(200);
     }
 
-    const aiAnalysis = await getBestRecommendationFromGemini(userQuery, shoppingResults);
+    const aiAnalysis = await getBestRecommendationFromAI(userQuery, shoppingResults);
     const productosRecomendados = logicFusion(shoppingResults, aiAnalysis);
 
     let responseText = `🤖 *Análisis Completado para "${userQuery}"*\n\n`;
