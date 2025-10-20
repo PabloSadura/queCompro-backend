@@ -130,6 +130,10 @@ export async function handleWhatsAppWebhook(req, res) {
     return res.sendStatus(200);
   }
 
+  // ✅ CORRECCIÓN: Envía la respuesta 200 OK a Meta inmediatamente.
+  res.sendStatus(200);
+
+  // Ahora que Meta está satisfecho, procesamos el mensaje.
   const userPhone = message.from;
   const userQuery = message.text.body.toLowerCase();
 
@@ -137,24 +141,23 @@ export async function handleWhatsAppWebhook(req, res) {
   
   const currentState = conversationState.get(userPhone);
 
+  // ✅ CORRECCIÓN: Usamos una estructura if/else if/else para un flujo más limpio.
   if (['hola', 'hey', 'buenas', 'buenos dias'].includes(userQuery)) {
     conversationState.set(userPhone, 'AWAITING_QUERY');
     await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras personal. ¿Qué producto te gustaría que analice por ti hoy?");
-    return res.sendStatus(200);
-  }
-
-  if (currentState === 'AWAITING_QUERY') {
+  } else if (currentState === 'AWAITING_QUERY') {
     conversationState.set(userPhone, 'SEARCHING');
-    await executeSearch(userPhone, message.text.body);
-    conversationState.delete(userPhone);
-    return res.sendStatus(200);
+    // La llamada a executeSearch ya no necesita 'await' aquí porque la respuesta ya fue enviada.
+    executeSearch(userPhone, message.text.body).finally(() => {
+      conversationState.delete(userPhone); // Limpia el estado cuando la búsqueda termina.
+    });
+  } else {
+    // Caso por defecto para búsquedas directas
+    conversationState.set(userPhone, 'SEARCHING');
+    executeSearch(userPhone, message.text.body).finally(() => {
+      conversationState.delete(userPhone);
+    });
   }
-
-  conversationState.set(userPhone, 'SEARCHING');
-  await executeSearch(userPhone, message.text.body);
-  conversationState.delete(userPhone);
-  
-  res.sendStatus(200);
 }
 
 /**
