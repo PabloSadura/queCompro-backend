@@ -1,6 +1,6 @@
 import { Router } from "express";
 import  verifyFirebaseToken  from "../middleware/auth.js";
-import { getProductById } from "../controllers/productDetails.controllers.js";
+import { getProductById } from "../controllers/productDetails.controller.js";
 
 
 const router = Router();

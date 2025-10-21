@@ -1,132 +1,28 @@
-// ✅ Importamos los orquestadores que centralizan la lógica de negocio
-import handleSearchStream  from './search.controller.js';
-import { getProductById } from './productDetails.controllers.js'; 
-import axios from 'axios';
-
-// --- Tus variables de entorno ---
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
-const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+import { executeWhatsAppSearch } from '../services/orchestor/whatsapp.orchestrator.js';
+import { getProductById } from './productDetails.controller.js'; 
+import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage } from '../services/search-service/whatsapp.service.js';
 
 // --- GESTIÓN DE ESTADO DE CONVERSACIÓN ---
 const conversationState = new Map();
 
-// --- FUNCIONES AUXILIARES DE ENVÍO ---
-function normalizePhoneNumber(phone) {
-  if (phone.startsWith('549') && phone.length === 13) {
-    return '54' + phone.substring(3);
-  }
-  return phone;
-}
-
-async function sendWhatsAppRequest(requestBody) {
-  const recipientNumber = normalizePhoneNumber(requestBody.to);
-  const finalBody = { ...requestBody, to: recipientNumber };
-  try {
-    await axios.post(WHATSAPP_API_URL, finalBody, {
-      headers: { 
-        'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-  } catch (error) {
-    console.error("❌ Error al enviar mensaje de WhatsApp:", error.response?.data || error.message);
-  }
-}
-
-function sendTextMessage(to, text) {
-  return sendWhatsAppRequest({ to, type: "text", text: { body: text }, messaging_product: "whatsapp" });
-}
-
-function sendImageMessage(to, imageUrl, caption = '') {
-  return sendWhatsAppRequest({ to, type: "image", image: { link: imageUrl, caption }, messaging_product: "whatsapp" });
-}
-
-function sendListMessage(to, headerText, bodyText, buttonText, sections) {
-  return sendWhatsAppRequest({
-    to,
-    type: "interactive",
-    interactive: {
-      type: "list",
-      header: { type: "text", text: headerText },
-      body: { text: bodyText },
-      action: { button: buttonText, sections },
-    },
-    messaging_product: "whatsapp"
-  });
-}
-
-function sendReplyButtonsMessage(to, bodyText, buttons) {
-  return sendWhatsAppRequest({
-    to,
-    type: "interactive",
-    interactive: {
-      type: "button",
-      body: { text: bodyText },
-      action: { buttons },
-    },
-    messaging_product: "whatsapp"
-  });
-}
-
-// --- LÓGICA DE BÚSQUEDA (DELEGADA) ---
-
-async function executeSearch(userPhone, searchData) {
-  let thinkingTimeout = null;
-  try {
-    const { query, minPrice, maxPrice } = searchData;
-    let searchingText = `¡Entendido! Buscando "${query}"`;
-    if(maxPrice) searchingText += ` hasta $${maxPrice}`;
-    if(minPrice) searchingText += ` desde $${minPrice}`;
-    searchingText += `... 🕵️‍♂️`;
-    
-    await sendTextMessage(userPhone, searchingText);
-
-    thinkingTimeout = setTimeout(() => {
-      sendTextMessage(userPhone, "El análisis está tardando un poco más de lo normal, pero sigo trabajando en ello... 🤓");
-    }, 20000);
-
-    // DELEGACIÓN: Llama al orquestador que sigue el mismo flujo que tu search.controller.js
-    const searchResult = await handleSearchStream(searchData);
-    
-    clearTimeout(thinkingTimeout);
-    
-    // Guarda el resultado completo (que ya incluye el 'id') en el estado de la conversación.
-    conversationState.set(userPhone, { 
-      state: 'AWAITING_PRODUCT_SELECTION', 
-      results: searchResult.productos, 
-      collectionId: searchResult.id 
-    });
-
-    // Formatea y envía la respuesta al usuario.
-    const rows = searchResult.productos.slice(0, 10).map(prod => ({
-      id: `select_product:${prod.product_id}`,
-      title: prod.title.substring(0, 24),
-      description: `Precio: ${prod.price}`.substring(0, 72)
-    }));
-
-    await sendListMessage(userPhone, `Análisis para "${query}"`, `¡Listo! Mi recomendación principal es:\n\n${searchResult.recomendacion_final}\n\nSelecciona una opción para ver más detalles.`, "Ver Opciones", [{ title: "Productos Recomendados", rows }]);
-
-  } catch (error) {
-    if (thinkingTimeout) clearTimeout(thinkingTimeout);
-    console.error("Error en executeSearch:", error.message);
-    await sendTextMessage(userPhone, `Lo siento, ocurrió un error inesperado durante la búsqueda: ${error.message}`);
-    conversationState.delete(userPhone);
-  }
-}
-
 // --- LÓGICA CONVERSACIONAL (ROUTER) ---
 
+/**
+ * Parsea un texto para extraer un rango de precios.
+ */
 function parsePriceFromText(text) {
   const priceRegex = /(\d{1,3}(?:[.,]\d{3})*)/g;
   const numbers = (text.match(priceRegex) || []).map(n => parseInt(n.replace(/[.,]/g, '')));
+  
   if (text.includes("entre") && numbers.length >= 2) return { minPrice: Math.min(...numbers), maxPrice: Math.max(...numbers) };
   if ((text.includes("menos de") || text.includes("hasta")) && numbers.length >= 1) return { maxPrice: numbers[0] };
   if ((text.includes("más de") || text.includes("desde")) && numbers.length >= 1) return { minPrice: numbers[0] };
   return {};
 }
 
+/**
+ * Maneja las respuestas a botones y listas interactivas.
+ */
 async function handleInteractiveReply(userPhone, message, currentStateData) {
   const { results, collectionId } = currentStateData;
   const replyId = message.interactive.list_reply?.id || message.interactive.button_reply?.id;
@@ -193,6 +89,9 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
   }
 }
 
+/**
+ * Controlador principal del webhook que actúa como router conversacional.
+ */
 export async function handleWhatsAppWebhook(req, res) {
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
   if (!message) return res.sendStatus(200);
@@ -222,26 +121,32 @@ export async function handleWhatsAppWebhook(req, res) {
         conversationState.set(userPhone, { state: 'AWAITING_PRICE_RANGE', data: { query: message.text.body, userId: userPhone } });
         await sendTextMessage(userPhone, `¡Entendido! ¿Tienes algún rango de precios en mente? (ej: "hasta 150000", o "no")`);
         break;
+      
       case 'AWAITING_PRICE_RANGE':
         const priceData = parsePriceFromText(userText);
         const searchData = { ...currentStateData.data, ...priceData };
         conversationState.set(userPhone, { state: 'SEARCHING' });
-        executeSearch(userPhone, searchData);
+        executeWhatsAppSearch(userPhone, searchData, conversationState);
         break;
+
       default:
         if (['hola', 'hey', 'buenas'].includes(userText)) {
           conversationState.set(userPhone, { state: 'AWAITING_QUERY' });
           await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras. ¿Qué producto te gustaría que analice por ti?");
         } else {
           conversationState.set(userPhone, { state: 'SEARCHING' });
-          executeSearch(userPhone, { query: message.text.body, userId: userPhone });
+          executeWhatsAppSearch(userPhone, { query: message.text.body, userId: userPhone }, conversationState);
         }
         break;
     }
   }
 }
 
+/**
+ * Verificación del Webhook.
+ */
 export function verifyWhatsAppWebhook(req, res) {
+  const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];

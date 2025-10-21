@@ -1,6 +1,6 @@
-import {saveSearchToFirebase} from "../services/search-service/firebaseService.js";
-import { fetchGoogleShoppingResults } from "../services/search-service/googleSopphing.js";
-import { getBestRecommendationFromGemini } from "../services/search-service/geminiService.js";
+import {saveSearchToFirebase} from "../services/search-service/firebaseService.service.js";
+import { fetchGoogleShoppingResults } from "../services/search-service/googleSopphing.service.js";
+import { getBestRecommendationFromGemini } from "../services/search-service/geminiService.service.js";
 import { getGeoLocation } from "./aiApi.controller.js";
 import logicFusion from "./logis.controller.js";
 
