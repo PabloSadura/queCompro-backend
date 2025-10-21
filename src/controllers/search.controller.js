@@ -1,78 +1,58 @@
-import {saveSearchToFirebase} from "../services/search-service/firebaseService.service.js";
-import { fetchGoogleShoppingResults } from "../services/search-service/googleSopphing.service.js";
-import { getBestRecommendationFromGemini } from "../services/search-service/geminiService.service.js";
+import { performSearchLogic } from "../services/orchestor/search.orchestrator.js";
 import { getGeoLocation } from "./aiApi.controller.js";
-import logicFusion from "./logis.controller.js";
 
 export default async function handleSearchStream(req, res) {
-    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    const geoData = await getGeoLocation(ip);
-    const countryCode= 'ar'
-    // const countryCode = geoData.countryCode.toLowerCase();
-    const languageCode = (countryCode === "ar" || countryCode === "es") ? "es" : "en";
-    const currency = 'ARS';
-    const userQuery = req.query.query;
-    const minPrice = Number(req.query.minPrice);
-    const maxPrice = Number(req.query.maxPrice);
-    const userId = req.user?.uid;
-
-    if (!userQuery || !userId) {
-        return res.status(400).json({ error: "Missing query or userId" });
-    }
-
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.flushHeaders();
-
-    function sendEvent(data) {
-        res.write(`data: ${JSON.stringify(data)}\n\n`);
-    }
-
     try {
-        // 1. Buscar en Google Shopping
+        const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+        const geoData = await getGeoLocation(ip);
+        
+        const userQuery = req.query.query;
+        const userId = req.user?.uid;
+
+        if (!userQuery || !userId) {
+            return res.status(400).json({ error: "Missing query or userId" });
+        }
+
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.flushHeaders();
+
+        function sendEvent(data) {
+            // Verificamos que la conexión no se haya cerrado antes de escribir
+            if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+            }
+        }
+
         sendEvent({ status: `Buscando en Google Shopping para: ${userQuery}...` });
-        // Asumo que esta función devuelve { products, totalResults } como discutimos
-        const { products: shoppingResults, totalResults } = await fetchGoogleShoppingResults(userId, userQuery, countryCode, languageCode, currency, minPrice, maxPrice);
         
-        if (!shoppingResults || shoppingResults.length === 0) {
-            sendEvent({ error: "No se encontraron productos en Google Shopping." });
-            return res.end();
-        }
+        // DELEGACIÓN: Llama al orquestador con los parámetros de la web
+        const searchResult = await performSearchLogic({
+            userId,
+            query: userQuery,
+            minPrice: Number(req.query.minPrice),
+            maxPrice: Number(req.query.maxPrice),
+            countryCode: geoData.countryCode.toLowerCase(),
+            languageCode: (geoData.countryCode.toLowerCase() === "ar" || geoData.countryCode.toLowerCase() === "es") ? "es" : "en",
+            currency: geoData.currency,
+        });
 
-        // 2. Analizar con Gemini para obtener la mejor recomendación
-        sendEvent({ status: `Analizando ${totalResults} resultados con Gemini u OpenAI...`});
-        const geminiAnalysis  = await getBestRecommendationFromGemini(userQuery, shoppingResults);
-        
-        if (!geminiAnalysis || !geminiAnalysis.productos_analisis) {
-            sendEvent({ error: "No se pudo obtener un análisis válido de Gemini." });
-            return res.end();
-        }
-        
-        // Obtenemos los productos base recomendados por la IA
-        const productosRecomendadosBase  = logicFusion(shoppingResults, geminiAnalysis);
+        sendEvent({ status: "Completado", result: searchResult });
 
-        // 3. Estructura final y guardado (con los productos SIN enriquecer)
-        const finalRecommendation = {
-            recomendacion_final: geminiAnalysis.recomendacion_final,
-            // ✅ AHORA USAMOS DIRECTAMENTE los productos recomendados base
-            productos: productosRecomendadosBase,
-            total_results: totalResults,
-        };
-        sendEvent({ status: "Guardando búsqueda y recomendación..." });
-       
-         // 4. Primero, guardamos en Firebase y esperamos a que nos devuelva el ID de la búsqueda.
-           const { id: searchId, createdAt } = await saveSearchToFirebase(userQuery, userId, finalRecommendation);
-
-
-
-        // . Finalmente, enviamos el evento 'Completado' con el objeto que contiene el ID.
-        sendEvent({ status: "Completado", result: finalRecommendation, id: searchId, createdAt: createdAt });
-
-        
     } catch (err) {
-        console.error("Error en el flujo de búsqueda:", err);
-        sendEvent({ status: "Error en búsqueda", error: err.message });
+        console.error("Error en el flujo de búsqueda:", err.message);
+        // Enviamos el error a través del stream si es posible
+        if (res && !res.headersSent) {
+            // Si las cabeceras no se han enviado, podemos enviar un error HTTP
+            res.status(500).json({ status: "Error en búsqueda", error: err.message });
+        } else if (res && !res.writableEnded) {
+            // Si el stream ya empezó, enviamos el error como un evento
+            res.write(`data: ${JSON.stringify({ status: "Error en búsqueda", error: err.message })}\n\n`);
+        }
     } finally {
-        res.end();
+        if (res && !res.writableEnded) {
+            res.end();
+        }
     }
 }
+

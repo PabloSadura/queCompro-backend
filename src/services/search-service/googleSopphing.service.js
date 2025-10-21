@@ -20,22 +20,11 @@ let RATING_FILTER_TBS = "mr:1,rt:4";
 export async function fetchGoogleShoppingResults(userId, userQuery, countryCode, languageCode, currency, minPrice, maxPrice) {
     if (!userQuery) throw new Error("La consulta no puede estar vacía.");
 
-    // const cacheKey = `serpapi:shopping:${userQuery}:${countryCode}:${languageCode}:${currency}:${minPrice}:${maxPrice}`;
-    // try {
-    //     const cachedData = await client.get(cacheKey);
-    //     if (cachedData) {
-    //         console.log("✅ Usando datos de caché para:", userQuery);
-    //         return JSON.parse(cachedData);
-    //     }
-    // } catch (err) {
-    //     console.error("❌ Error al acceder a Redis, procediendo sin caché:", err);
-    // }
-
     if (minPrice && !isNaN(minPrice)) {
-        RATING_FILTER_TBS += `,p_ord:pmin${minPrice}`; // Añade precio mínimo
+        RATING_FILTER_TBS += `,p_ord:pmin${minPrice}`; 
     }
     if (maxPrice && !isNaN(maxPrice)) {
-        RATING_FILTER_TBS += `,p_ord:pmax${maxPrice}`; // Añade precio máximo
+        RATING_FILTER_TBS += `,p_ord:pmax${maxPrice}`; 
     }
 
     const params = {
@@ -57,24 +46,13 @@ export async function fetchGoogleShoppingResults(userId, userQuery, countryCode,
             }
             
             const results = data.shopping_results || [];
-            // Si no viene total_results, usamos el largo de los resultados obtenidos como fallback
             const total_results = data.search_information?.total_results || results.length;
 
-            // ✅ CAMBIO 1: Crear un único objeto para devolver
             const dataToReturn = {
                 products: results,
                 totalResults: total_results
             };
 
-            // // ✅ CAMBIO 2: Guardar el objeto completo en la caché
-            // // Usamos un try/catch por si Redis falla, para que no detenga el flujo
-            // try {
-            //     client.set(cacheKey, JSON.stringify(dataToReturn), { EX: CACHE_EXPIRATION_TIME });
-            // } catch (cacheErr) {
-            //     console.error("❌ Error al guardar en Redis:", cacheErr);
-            // }
-
-            // ✅ CAMBIO 3: Resolver la promesa con el objeto completo
             resolve(dataToReturn);
         });
     });

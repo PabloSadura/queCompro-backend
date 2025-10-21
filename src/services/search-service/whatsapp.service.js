@@ -17,7 +17,7 @@ function normalizePhoneNumber(phone) {
 }
 
 /**
- * Función base para enviar cualquier tipo de petición a la API de WhatsApp.
+ * Función base para enviar cualquier tipo de mensaje a la API de WhatsApp.
  */
 async function sendWhatsAppRequest(requestBody) {
   const recipientNumber = normalizePhoneNumber(requestBody.to);
@@ -34,16 +34,23 @@ async function sendWhatsAppRequest(requestBody) {
   }
 }
 
-// --- Funciones exportadas para enviar diferentes tipos de mensajes ---
-
+/**
+ * Envía un mensaje de texto simple.
+ */
 export function sendTextMessage(to, text) {
   return sendWhatsAppRequest({ to, type: "text", text: { body: text }, messaging_product: "whatsapp" });
 }
 
+/**
+ * Envía una imagen con una descripción opcional.
+ */
 export function sendImageMessage(to, imageUrl, caption = '') {
   return sendWhatsAppRequest({ to, type: "image", image: { link: imageUrl, caption }, messaging_product: "whatsapp" });
 }
 
+/**
+ * Envía un mensaje de lista interactiva.
+ */
 export function sendListMessage(to, headerText, bodyText, buttonText, sections) {
   return sendWhatsAppRequest({
     to,
@@ -58,6 +65,9 @@ export function sendListMessage(to, headerText, bodyText, buttonText, sections) 
   });
 }
 
+/**
+ * Envía un mensaje con botones de respuesta.
+ */
 export function sendReplyButtonsMessage(to, bodyText, buttons) {
   return sendWhatsAppRequest({
     to,
@@ -70,3 +80,4 @@ export function sendReplyButtonsMessage(to, bodyText, buttons) {
     messaging_product: "whatsapp"
   });
 }
+

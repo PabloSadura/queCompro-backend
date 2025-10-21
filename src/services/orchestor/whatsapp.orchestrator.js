@@ -1,4 +1,4 @@
-import handleSearchStream from '../../controllers/search.controller.js';
+import { performSearchLogic as runSearchAndRecommendation} from './search.orchestrator.js';
 import { sendTextMessage, sendListMessage } from '../search-service/whatsapp.service.js';
 
 /**
@@ -22,8 +22,14 @@ export async function executeWhatsAppSearch(userPhone, searchData, conversationS
       sendTextMessage(userPhone, "El análisis está tardando un poco más de lo normal, pero sigo trabajando en ello... 🤓");
     }, 20000);
 
-    // Llama al orquestador de búsqueda principal (el mismo que usa la web)
-    const searchResult = await handleSearchStream(searchData);
+    // DELEGACIÓN: Llama al orquestador principal, pero pasa parámetros fijos
+    // para la geolocalización, ya que no los tenemos en WhatsApp.
+    const searchResult = await runSearchAndRecommendation({
+      ...searchData,
+      countryCode: 'ar',
+      languageCode: 'es',
+      currency: 'ARS'
+    });
     
     clearTimeout(thinkingTimeout);
     

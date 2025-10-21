@@ -1,8 +1,6 @@
 import { executeWhatsAppSearch } from '../services/orchestor/whatsapp.orchestrator.js';
 import { getProductById } from './productDetails.controller.js'; 
-import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage } from '../services/search-service/whatsapp.service.js';
-
-// --- GESTIÓN DE ESTADO DE CONVERSACIÓN ---
+import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage } from '../services/search-service/whatsapp.service.js'
 const conversationState = new Map();
 
 // --- LÓGICA CONVERSACIONAL (ROUTER) ---
