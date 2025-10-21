@@ -12,6 +12,8 @@ import logicFusion from "../../controllers/logis.controller.js";
 export async function performSearchLogic(searchParams) {
   const { userId, query, countryCode, languageCode, currency, minPrice, maxPrice } = searchParams;
 
+  
+
   // 1. Buscar en Google Shopping
   const { products: shoppingResults, totalResults } = await fetchGoogleShoppingResults(
     userId, query, countryCode, languageCode, currency, minPrice, maxPrice
@@ -20,7 +22,6 @@ export async function performSearchLogic(searchParams) {
     throw new Error("No se encontraron productos en Google Shopping.");
   }
 
-  sendEvent({ status: 'Analizando productos con IA'});
 
   // 2. Analizar con IA para obtener la mejor recomendación
   const aiAnalysis = await getBestRecommendationFromGemini(query, shoppingResults);
@@ -28,7 +29,6 @@ export async function performSearchLogic(searchParams) {
     throw new Error("No se pudo obtener un análisis válido de la IA.");
   }
 
-  sendEvent({ status: 'Preparando productos...'});
 
   // 3. Fusionar datos y marcar el producto recomendado
   const productosRecomendadosBase = logicFusion(shoppingResults, aiAnalysis);
@@ -46,7 +46,6 @@ export async function performSearchLogic(searchParams) {
     productos: productosConRecomendacion,
     total_results: totalResults,
   };
-  sendEvent({ status: 'Guardando productos...'});
 
   // 5. Guardar en Firebase para obtener el ID y la fecha
   const { id: searchId, createdAt } = await saveSearchToFirebase(query, userId, finalRecommendation);
