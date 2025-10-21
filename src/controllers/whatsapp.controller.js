@@ -42,9 +42,10 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
       let enrichedProduct;
       const mockReq = { params: { idCollection: collectionId, idProduct: payload } };
      
-      console.log(mockRes);
       
       const mockRes = { status: () => mockRes, json: (data) => { enrichedProduct = data; } };
+      
+      console.log(mockRes);
 
       enrichedProduct = await getProductById(mockReq, mockRes);
       
