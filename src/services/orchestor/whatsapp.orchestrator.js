@@ -43,7 +43,7 @@ export async function executeWhatsAppSearch(userPhone, searchData, conversationS
     // Formatea y envía una lista interactiva al usuario
     const rows = searchResult.productos.slice(0, 10).map(prod => ({
       id: `select_product:${prod.product_id}`,
-      title: prod.title,
+      title: prod.title.substring(0, 24),
       description: `Precio: ${prod.price}`.substring(0, 72)
     }));
 
