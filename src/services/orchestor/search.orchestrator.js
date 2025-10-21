@@ -20,11 +20,15 @@ export async function performSearchLogic(searchParams) {
     throw new Error("No se encontraron productos en Google Shopping.");
   }
 
+  sendEvent({ status: 'Analizando productos con IA'});
+
   // 2. Analizar con IA para obtener la mejor recomendación
   const aiAnalysis = await getBestRecommendationFromGemini(query, shoppingResults);
   if (!aiAnalysis || !aiAnalysis.productos_analisis) {
     throw new Error("No se pudo obtener un análisis válido de la IA.");
   }
+
+  sendEvent({ status: 'Preparando productos...'});
 
   // 3. Fusionar datos y marcar el producto recomendado
   const productosRecomendadosBase = logicFusion(shoppingResults, aiAnalysis);
@@ -42,6 +46,7 @@ export async function performSearchLogic(searchParams) {
     productos: productosConRecomendacion,
     total_results: totalResults,
   };
+  sendEvent({ status: 'Guardando productos...'});
 
   // 5. Guardar en Firebase para obtener el ID y la fecha
   const { id: searchId, createdAt } = await saveSearchToFirebase(query, userId, finalRecommendation);

@@ -1,5 +1,4 @@
 import { getJson } from "serpapi";
-import client from "../../config/redis.js";
 import dotenv from 'dotenv';
 dotenv.config(); // Cargar variables de entorno
 

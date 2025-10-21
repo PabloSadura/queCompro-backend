@@ -1,7 +1,7 @@
 import { getProductFromFirebase, updateProductInFirebase } from '../services/search-service/firebaseService.service.js';
 import { fetchImmersiveProductDetails } from '../services/search-service/googleInmersive.service.js';
 
-export async function getProductById(req, res) {
+export async function  getProductById(req, res) {
     
     const { idCollection, idProduct } = req.params;
 
