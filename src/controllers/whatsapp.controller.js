@@ -35,24 +35,22 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
   
   if (action === 'select_product') {
     const product = results?.find(p => p.product_id == payload);
-    console.log(product);
-    console.log(payload);
-    
     
     if (!product) return;
     await sendTextMessage(userPhone, `Buscando detalles para *${product.title}*...`);
     try {
       let enrichedProduct;
       const mockReq = { params: { idCollection: collectionId, idProduct: payload } };
-      console.log(mockReq);
+     
+      console.log(mockRes);
       
       const mockRes = { status: () => mockRes, json: (data) => { enrichedProduct = data; } };
-      await getProductById(mockReq, mockRes);
+
+      enrichedProduct = await getProductById(mockReq, mockRes);
       
       if (!enrichedProduct) throw new Error("El servicio no devolvió un producto enriquecido.");
 
-      const updatedResults = results.map(p => p.product_id == payload ? enrichedProduct : p);
-      conversationState.set(userPhone, { ...currentStateData, results: updatedResults });
+      conversationState.set(userPhone, { ...currentStateData, results: enrichedProduct });
 
       const buttons = [
         { type: 'reply', reply: { id: `show_details:${payload}`, title: 'Pros y Contras' } },
