@@ -1,5 +1,7 @@
 import { getBestRecommendationFromGemini } from '../services/search-service/geminiService.js';
 import { fetchGoogleShoppingResults } from '../services/search-service/googleSopphing.js';
+import { saveSearchToFirebase } from '../services/search-service/firebaseService.js';
+import { getProductById } from './product.controller.js'; 
 import logicFusion from './logis.controller.js';
 import axios from 'axios';
 
@@ -13,7 +15,6 @@ const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMB
 const conversationState = new Map();
 
 // --- FUNCIONES AUXILIARES DE ENVÍO ---
-
 function normalizePhoneNumber(phone) {
   if (phone.startsWith('549') && phone.length === 13) {
     return '54' + phone.substring(3);
@@ -44,7 +45,6 @@ function sendImageMessage(to, imageUrl, caption = '') {
   return sendWhatsAppRequest({ to, type: "image", image: { link: imageUrl, caption }, messaging_product: "whatsapp" });
 }
 
-// ✅ NUEVO: Función para enviar una lista interactiva
 function sendListMessage(to, headerText, bodyText, buttonText, sections) {
   return sendWhatsAppRequest({
     to,
@@ -59,7 +59,6 @@ function sendListMessage(to, headerText, bodyText, buttonText, sections) {
   });
 }
 
-// ✅ NUEVO: Función para enviar botones de respuesta
 function sendReplyButtonsMessage(to, bodyText, buttons) {
   return sendWhatsAppRequest({
     to,
@@ -73,129 +72,194 @@ function sendReplyButtonsMessage(to, bodyText, buttons) {
   });
 }
 
-/**
- * Procesa la lógica de búsqueda y envía una lista interactiva.
- */
-async function executeSearch(userPhone, userQuery) {
+// --- LÓGICA DE BÚSQUEDA Y ENRIQUECIMIENTO ---
+
+async function executeSearch(userPhone, searchData) {
+  let thinkingTimeout = null;
   try {
-    await sendTextMessage(userPhone, `¡Entendido! Dame un momento mientras busco "${userQuery}"... 🕵️‍♂️`);
-    const { products: shoppingResults } = await fetchGoogleShoppingResults(null, userQuery, 'ar', 'es', 'ARS');
+    const { query, minPrice, maxPrice, userId } = searchData;
+    await sendTextMessage(userPhone, `¡Entendido! Buscando "${query}"... 🕵️‍♂️`);
+    
+    const { products: shoppingResults, totalResults } = await fetchGoogleShoppingResults(null, query, 'ar', 'es', 'ARS', minPrice, maxPrice);
     if (!shoppingResults || shoppingResults.length === 0) {
-      await sendTextMessage(userPhone, "Lo siento, no encontré productos para tu búsqueda.");
+      await sendTextMessage(userPhone, "Lo siento, no encontré productos con esos criterios.");
+      conversationState.delete(userPhone);
       return;
     }
 
     await sendTextMessage(userPhone, "Encontré varios productos. Ahora, mi IA los está analizando... 🧠");
-    const aiAnalysis = await getBestRecommendationFromGemini(userQuery, shoppingResults);
-    const productosRecomendados = logicFusion(shoppingResults, aiAnalysis);
 
-    // Guardamos los resultados en el estado de la conversación para usarlos después
-    conversationState.set(userPhone, { state: 'AWAITING_PRODUCT_SELECTION', results: productosRecomendados });
+    thinkingTimeout = setTimeout(() => {
+      sendTextMessage(userPhone, "El análisis está tardando un poco más de lo normal, pero sigo trabajando en ello... 🤓");
+    }, 10000);
 
-    // Preparamos las filas para el mensaje de lista
-    const rows = productosRecomendados.slice(0, 10).map(prod => ({ // La lista solo puede tener 10 items
+    const aiAnalysis = await getBestRecommendationFromGemini(query, shoppingResults);
+    
+    clearTimeout(thinkingTimeout);
+    
+    const productosRecomendados = logicFusion(shoppingResults, aiAnalysis).map(p => ({
+        ...p,
+        isRecommended: aiAnalysis.productos_analisis.find(a => a.product_id === p.product_id)?.isRecommended || false
+    }));
+
+    const finalRecommendation = {
+        recomendacion_final: aiAnalysis.recomendacion_final,
+        productos: productosRecomendados,
+        total_results: totalResults,
+    };
+    
+    const { id: collectionId } = await saveSearchToFirebase(query, userId, finalRecommendation);
+    conversationState.set(userPhone, { state: 'AWAITING_PRODUCT_SELECTION', results: productosRecomendados, collectionId });
+
+    const rows = productosRecomendados.slice(0, 10).map(prod => ({
       id: `select_product:${prod.product_id}`,
       title: prod.title.substring(0, 24),
       description: `Precio: ${prod.price}`.substring(0, 72)
     }));
 
-    await sendListMessage(
-      userPhone,
-      `Análisis para "${userQuery}"`,
-      `¡Listo! Mi recomendación principal es:\n\n${aiAnalysis.recomendacion_final}\n\nPara ver más detalles, selecciona una de las mejores opciones de la lista de abajo.`,
-      "Ver Opciones",
-      [{ title: "Productos Recomendados", rows }]
-    );
+    await sendListMessage(userPhone, `Análisis para "${query}"`, `¡Listo! Mi recomendación principal es:\n\n${aiAnalysis.recomendacion_final}\n\nSelecciona una opción para ver más detalles.`, "Ver Opciones", [{ title: "Productos Recomendados", rows }]);
 
   } catch (error) {
-    console.error("Error procesando la búsqueda de WhatsApp:", error);
-    await sendTextMessage(userPhone, "Lo siento, ocurrió un error inesperado al procesar tu búsqueda.");
+    if (thinkingTimeout) clearTimeout(thinkingTimeout);
+    console.error("Error en executeSearch:", error);
+    await sendTextMessage(userPhone, "Lo siento, ocurrió un error inesperado durante la búsqueda.");
+    conversationState.delete(userPhone);
   }
 }
 
-/**
- * Controlador principal para el webhook de WhatsApp, ahora con lógica interactiva.
- */
-export async function handleWhatsAppWebhook(req, res) {
-  const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-  if (!message) return res.sendStatus(200);
-  res.sendStatus(200); // Responde inmediatamente a Meta
+// --- LÓGICA CONVERSACIONAL (ROUTER) ---
 
-  const userPhone = message.from;
-  const currentStateData = conversationState.get(userPhone) || {};
-  const { state, results } = currentStateData;
+function parsePriceFromText(text) {
+  const priceRegex = /(\d{1,3}(?:[.,]\d{3})*)/g;
+  const numbers = (text.match(priceRegex) || []).map(n => parseInt(n.replace(/[.,]/g, '')));
+  if (text.includes("entre") && numbers.length >= 2) return { minPrice: Math.min(...numbers), maxPrice: Math.max(...numbers) };
+  if ((text.includes("menos de") || text.includes("hasta")) && numbers.length >= 1) return { maxPrice: numbers[0] };
+  if ((text.includes("más de") || text.includes("desde")) && numbers.length >= 1) return { minPrice: numbers[0] };
+  return {};
+}
 
-  // --- 1. MANEJO DE RESPUESTAS INTERACTIVAS ---
-  if (message.type === 'interactive') {
-    const replyId = message.interactive.list_reply?.id || message.interactive.button_reply?.id;
-    if (!replyId) return;
+async function handleInteractiveReply(userPhone, message, currentStateData) {
+  const { results, collectionId } = currentStateData;
+  const replyId = message.interactive.list_reply?.id || message.interactive.button_reply?.id;
+  if (!replyId) return;
 
-    const [action, payload] = replyId.split(':');
+  const [action, payload] = replyId.split(':');
+  
+  const setClosingState = async () => {
+    await sendTextMessage(userPhone, "¿Puedo ayudarte en algo más?");
+    conversationState.set(userPhone, { ...currentStateData, state: 'AWAITING_CLOSING' });
+  };
+  
+  if (action === 'select_product') {
     const product = results?.find(p => p.product_id === payload);
     if (!product) return;
+    await sendTextMessage(userPhone, `Buscando detalles para *${product.title}*...`);
+    try {
+      let enrichedProduct;
+      const mockReq = { params: { idCollection: collectionId, idProduct: payload } };
+      const mockRes = {
+        status: () => mockRes,
+        json: (data) => { enrichedProduct = data; }
+      };
+      await getProductById(mockReq, mockRes);
+      
+      const updatedResults = results.map(p => p.product_id === payload ? enrichedProduct : p);
+      conversationState.set(userPhone, { ...currentStateData, results: updatedResults });
 
-    if (action === 'select_product') {
       const buttons = [
         { type: 'reply', reply: { id: `show_details:${payload}`, title: 'Pros y Contras' } },
         { type: 'reply', reply: { id: `show_stores:${payload}`, title: 'Opciones de Compra' } },
         { type: 'reply', reply: { id: `show_images:${payload}`, title: 'Ver Imágenes' } },
       ];
-      await sendReplyButtonsMessage(userPhone, `Seleccionaste: *${product.title}*.\n\n¿Qué te gustaría ver?`, buttons);
-    } 
-    else if (action === 'show_details') {
-      let detailsText = `*Análisis para ${product.title}*:\n\n`;
-      detailsText += "*✅ PROS:*\n" + (product.pros?.map(p => `- ${p}`).join('\n') || "No disponibles");
-      detailsText += "\n\n*❌ CONTRAS:*\n" + (product.contras?.map(c => `- ${c}`).join('\n') || "No disponibles");
-      await sendTextMessage(userPhone, detailsText);
-    } 
-  else if (action === 'show_stores') {
-    let storesText = `*Opciones de Compra para ${product.title}:*\n\n`;
-    const stores = product.immersive_details?.stores;
-
-    if (stores && Array.isArray(stores) && stores.length > 0) {
-      stores.forEach((link, index) => {
-        storesText += `${index + 1}. ${link}\n`;
-      });
-    } else {
-      storesText = "Lo siento, no encontré opciones de compra para este producto.";
+      await sendReplyButtonsMessage(userPhone, `¡Listo! Seleccionaste: *${product.title}*.\n\n¿Qué te gustaría ver?`, buttons);
+    } catch (error) {
+      console.error("Error al obtener detalles inmersivos:", error);
+      await sendTextMessage(userPhone, "Lo siento, no pude obtener los detalles completos para este producto.");
     }
-    await sendTextMessage(userPhone, storesText);
   } 
-   else if (action === 'show_images') {
-    await sendTextMessage(userPhone, `Aquí tienes las imágenes para *${product.title}*:`);
-    // ✅ CORRECCIÓN: Ahora busca en immersive_details.thumbnails
-    const images = product.immersive_details?.thumbnails || [product.thumbnail];
-
-    if (images && images.length > 0) {
-        // Envía hasta un máximo de 4 imágenes para no saturar al usuario
-        for (const img of images.slice(0, 4)) {
-            if (img) await sendImageMessage(userPhone, img);
-        }
-    } else {
-        await sendTextMessage(userPhone, "Lo siento, no encontré imágenes adicionales para este producto.");
-    }
-  }
-    return;
-  }
-
-  // --- 2. MANEJO DE MENSAJES DE TEXTO ---
-  if (message.type === 'text') {
-    const userQuery = message.text.body.toLowerCase();
-
-    if (['hola', 'hey', 'buenas'].includes(userQuery)) {
-      conversationState.set(userPhone, { state: 'AWAITING_QUERY' });
-      await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras. ¿Qué producto te gustaría que analice por ti?");
-    } else {
-      conversationState.set(userPhone, { state: 'SEARCHING' });
-      executeSearch(userPhone, message.text.body); // Se ejecuta en segundo plano
+  else {
+    const product = results?.find(p => p.product_id === payload);
+    if (!product) return;
+    
+    if (action === 'show_details') {
+      let detailsText = `*Análisis para ${product.title}*:\n\n*✅ PROS:*\n${product.pros?.map(p => `- ${p}`).join('\n') || "No disponibles"}\n\n*❌ CONTRAS:*\n${product.contras?.map(c => `- ${c}`).join('\n') || "No disponibles"}`;
+      await sendTextMessage(userPhone, detailsText);
+      await setClosingState();
+    } else if (action === 'show_stores') {
+      let storesText = `*Opciones de Compra para ${product.title}:*\n\n`;
+      const stores = product.immersive_details?.stores;
+      if (stores && Array.isArray(stores) && stores.length > 0) {
+        stores.forEach((link, index) => { storesText += `${index + 1}. ${link}\n`; });
+      } else { storesText = "Lo siento, no encontré opciones de compra para este producto."; }
+      await sendTextMessage(userPhone, storesText);
+      await setClosingState();
+    } else if (action === 'show_images') {
+      await sendTextMessage(userPhone, `Aquí tienes las imágenes para *${product.title}*:`);
+      const images = product.immersive_details?.thumbnails || [product.thumbnail];
+      if (images && images.length > 0) {
+        for (const img of images.slice(0, 4)) { if (img) await sendImageMessage(userPhone, img); }
+      } else { await sendTextMessage(userPhone, "Lo siento, no encontré imágenes adicionales."); }
+      await setClosingState();
     }
   }
 }
 
-/**
- * Verificación del Webhook.
- */
+export async function handleWhatsAppWebhook(req, res) {
+  const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  if (!message) return res.sendStatus(200);
+  res.sendStatus(200);
+
+  const userPhone = message.from;
+  const currentStateData = conversationState.get(userPhone) || { state: 'GREETING' };
+
+  if (message.type === 'interactive') {
+    handleInteractiveReply(userPhone, message, currentStateData);
+    return;
+  }
+
+  if (message.type === 'text') {
+    const userText = message.text.body.toLowerCase();
+    if (currentStateData.state === 'AWAITING_CLOSING') {
+      const negativeKeywords = ['no', 'gracias', 'nada mas', 'eso es todo', 'chau'];
+      if (negativeKeywords.some(keyword => userText.includes(keyword))) {
+        await sendTextMessage(userPhone, "¡De nada! Estoy aquí si necesitas algo más. 😊");
+        conversationState.delete(userPhone);
+        return;
+      }
+    }
+
+    switch (currentStateData.state) {
+      case 'AWAITING_QUERY':
+        conversationState.set(userPhone, { state: 'AWAITING_PRICE_RANGE', data: { query: message.text.body, userId: userPhone } });
+        await sendTextMessage(userPhone, `¡Entendido! ¿Tienes algún rango de precios en mente? (ej: "hasta 150000", o "no")`);
+        break;
+      case 'AWAITING_PRICE_RANGE':
+        const priceData = parsePriceFromText(userText);
+        const searchData = { ...currentStateData.data, ...priceData };
+        conversationState.set(userPhone, { state: 'SEARCHING' });
+        executeSearch(userPhone, searchData);
+        break;
+      default:
+        if (['hola', 'hey', 'buenas'].includes(userText)) {
+          conversationState.set(userPhone, { state: 'AWAITING_QUERY' });
+          await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras. ¿Qué producto te gustaría que analice por ti?");
+        } else {
+          conversationState.set(userPhone, { state: 'SEARCHING' });
+          executeSearch(userPhone, { query: message.text.body, userId: userPhone });
+        }
+        break;
+    }
+  }
+}
+
 export function verifyWhatsAppWebhook(req, res) {
-  // ... (código sin cambios)
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403);
+  }
 }
 
