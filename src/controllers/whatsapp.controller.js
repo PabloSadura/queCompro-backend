@@ -148,16 +148,22 @@ export async function handleWhatsAppWebhook(req, res) {
       detailsText += "\n\n*❌ CONTRAS:*\n" + (product.contras?.map(c => `- ${c}`).join('\n') || "No disponibles");
       await sendTextMessage(userPhone, detailsText);
     } 
-    else if (action === 'show_stores') {
-      let storesText = `*Tiendas para ${product.title}:*\n\n`;
-      product.immersive_details?.stores?.forEach(store => {
-        storesText += `*${store.name}* - ${store.price}\n${store.link}\n\n`;
+  else if (action === 'show_stores') {
+    let storesText = `*Opciones de Compra para ${product.title}:*\n\n`;
+    const stores = product.immersive_details?.stores;
+
+    if (stores && Array.isArray(stores) && stores.length > 0) {
+      stores.forEach((link, index) => {
+        storesText += `${index + 1}. ${link}\n`;
       });
-      await sendTextMessage(userPhone, storesText || "No encontré opciones de compra.");
-    } 
+    } else {
+      storesText = "Lo siento, no encontré opciones de compra para este producto.";
+    }
+    await sendTextMessage(userPhone, storesText);
+  } 
     else if (action === 'show_images') {
       await sendTextMessage(userPhone, `Aquí tienes las imágenes para *${product.title}*:`);
-      for (const img of (product.thumbnails || [product.thumbnail]).slice(0, 4)) {
+      for (const img of (product.immersive_details?.thumbnails || [product.thumbnail]).slice(0, 4)) {
         if(img) await sendImageMessage(userPhone, img);
       }
     }
