@@ -161,12 +161,20 @@ export async function handleWhatsAppWebhook(req, res) {
     }
     await sendTextMessage(userPhone, storesText);
   } 
-    else if (action === 'show_images') {
-      await sendTextMessage(userPhone, `Aquí tienes las imágenes para *${product.title}*:`);
-      for (const img of (product.immersive_details?.thumbnails || [product.thumbnail]).slice(0, 4)) {
-        if(img) await sendImageMessage(userPhone, img);
-      }
+   else if (action === 'show_images') {
+    await sendTextMessage(userPhone, `Aquí tienes las imágenes para *${product.title}*:`);
+    // ✅ CORRECCIÓN: Ahora busca en immersive_details.thumbnails
+    const images = product.immersive_details?.thumbnails || [product.thumbnail];
+
+    if (images && images.length > 0) {
+        // Envía hasta un máximo de 4 imágenes para no saturar al usuario
+        for (const img of images.slice(0, 4)) {
+            if (img) await sendImageMessage(userPhone, img);
+        }
+    } else {
+        await sendTextMessage(userPhone, "Lo siento, no encontré imágenes adicionales para este producto.");
     }
+  }
     return;
   }
 
