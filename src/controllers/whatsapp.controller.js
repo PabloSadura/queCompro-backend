@@ -1,7 +1,7 @@
 import { getBestRecommendationFromGemini } from '../services/search-service/geminiService.js';
 import { fetchGoogleShoppingResults } from '../services/search-service/googleSopphing.js';
 import { saveSearchToFirebase } from '../services/search-service/firebaseService.js';
-import { getProductById } from './product.controller.js'; 
+import { getProductById } from './productDetails.controllers.js'; 
 import logicFusion from './logis.controller.js';
 import axios from 'axios';
 
