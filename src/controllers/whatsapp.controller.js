@@ -1,8 +1,6 @@
-import { getBestRecommendationFromGemini } from '../services/search-service/geminiService.js';
-import { fetchGoogleShoppingResults } from '../services/search-service/googleSopphing.js';
-import { saveSearchToFirebase } from '../services/search-service/firebaseService.js';
+// ✅ Importamos los orquestadores que centralizan la lógica de negocio
+import handleSearchStream  from './search.controller.js';
 import { getProductById } from './productDetails.controllers.js'; 
-import logicFusion from './logis.controller.js';
 import axios from 'axios';
 
 // --- Tus variables de entorno ---
@@ -72,57 +70,48 @@ function sendReplyButtonsMessage(to, bodyText, buttons) {
   });
 }
 
-// --- LÓGICA DE BÚSQUEDA Y ENRIQUECIMIENTO ---
+// --- LÓGICA DE BÚSQUEDA (DELEGADA) ---
 
 async function executeSearch(userPhone, searchData) {
   let thinkingTimeout = null;
   try {
-    const { query, minPrice, maxPrice, userId } = searchData;
-    await sendTextMessage(userPhone, `¡Entendido! Buscando "${query}"... 🕵️‍♂️`);
+    const { query, minPrice, maxPrice } = searchData;
+    let searchingText = `¡Entendido! Buscando "${query}"`;
+    if(maxPrice) searchingText += ` hasta $${maxPrice}`;
+    if(minPrice) searchingText += ` desde $${minPrice}`;
+    searchingText += `... 🕵️‍♂️`;
     
-    const { products: shoppingResults, totalResults } = await fetchGoogleShoppingResults(null, query, 'ar', 'es', 'ARS', minPrice, maxPrice);
-    if (!shoppingResults || shoppingResults.length === 0) {
-      await sendTextMessage(userPhone, "Lo siento, no encontré productos con esos criterios.");
-      conversationState.delete(userPhone);
-      return;
-    }
-
-    await sendTextMessage(userPhone, "Encontré varios productos. Ahora, mi IA los está analizando... 🧠");
+    await sendTextMessage(userPhone, searchingText);
 
     thinkingTimeout = setTimeout(() => {
       sendTextMessage(userPhone, "El análisis está tardando un poco más de lo normal, pero sigo trabajando en ello... 🤓");
-    }, 10000);
+    }, 20000);
 
-    const aiAnalysis = await getBestRecommendationFromGemini(query, shoppingResults);
+    // DELEGACIÓN: Llama al orquestador que sigue el mismo flujo que tu search.controller.js
+    const searchResult = await handleSearchStream(searchData);
     
     clearTimeout(thinkingTimeout);
     
-    const productosRecomendados = logicFusion(shoppingResults, aiAnalysis).map(p => ({
-        ...p,
-        isRecommended: aiAnalysis.productos_analisis.find(a => a.product_id === p.product_id)?.isRecommended || false
-    }));
+    // Guarda el resultado completo (que ya incluye el 'id') en el estado de la conversación.
+    conversationState.set(userPhone, { 
+      state: 'AWAITING_PRODUCT_SELECTION', 
+      results: searchResult.productos, 
+      collectionId: searchResult.id 
+    });
 
-    const finalRecommendation = {
-        recomendacion_final: aiAnalysis.recomendacion_final,
-        productos: productosRecomendados,
-        total_results: totalResults,
-    };
-    
-    const { id: collectionId } = await saveSearchToFirebase(query, userId, finalRecommendation);
-    conversationState.set(userPhone, { state: 'AWAITING_PRODUCT_SELECTION', results: productosRecomendados, collectionId });
-
-    const rows = productosRecomendados.slice(0, 10).map(prod => ({
+    // Formatea y envía la respuesta al usuario.
+    const rows = searchResult.productos.slice(0, 10).map(prod => ({
       id: `select_product:${prod.product_id}`,
       title: prod.title.substring(0, 24),
       description: `Precio: ${prod.price}`.substring(0, 72)
     }));
 
-    await sendListMessage(userPhone, `Análisis para "${query}"`, `¡Listo! Mi recomendación principal es:\n\n${aiAnalysis.recomendacion_final}\n\nSelecciona una opción para ver más detalles.`, "Ver Opciones", [{ title: "Productos Recomendados", rows }]);
+    await sendListMessage(userPhone, `Análisis para "${query}"`, `¡Listo! Mi recomendación principal es:\n\n${searchResult.recomendacion_final}\n\nSelecciona una opción para ver más detalles.`, "Ver Opciones", [{ title: "Productos Recomendados", rows }]);
 
   } catch (error) {
     if (thinkingTimeout) clearTimeout(thinkingTimeout);
-    console.error("Error en executeSearch:", error);
-    await sendTextMessage(userPhone, "Lo siento, ocurrió un error inesperado durante la búsqueda.");
+    console.error("Error en executeSearch:", error.message);
+    await sendTextMessage(userPhone, `Lo siento, ocurrió un error inesperado durante la búsqueda: ${error.message}`);
     conversationState.delete(userPhone);
   }
 }
@@ -151,19 +140,18 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
   };
   
   if (action === 'select_product') {
-    const product = results?.find(p => p.product_id === payload);
+    const product = results?.find(p => p.product_id == payload);
     if (!product) return;
     await sendTextMessage(userPhone, `Buscando detalles para *${product.title}*...`);
     try {
       let enrichedProduct;
       const mockReq = { params: { idCollection: collectionId, idProduct: payload } };
-      const mockRes = {
-        status: () => mockRes,
-        json: (data) => { enrichedProduct = data; }
-      };
+      const mockRes = { status: () => mockRes, json: (data) => { enrichedProduct = data; } };
       await getProductById(mockReq, mockRes);
       
-      const updatedResults = results.map(p => p.product_id === payload ? enrichedProduct : p);
+      if (!enrichedProduct) throw new Error("El servicio no devolvió un producto enriquecido.");
+
+      const updatedResults = results.map(p => p.product_id == payload ? enrichedProduct : p);
       conversationState.set(userPhone, { ...currentStateData, results: updatedResults });
 
       const buttons = [
@@ -172,13 +160,14 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
         { type: 'reply', reply: { id: `show_images:${payload}`, title: 'Ver Imágenes' } },
       ];
       await sendReplyButtonsMessage(userPhone, `¡Listo! Seleccionaste: *${product.title}*.\n\n¿Qué te gustaría ver?`, buttons);
+
     } catch (error) {
       console.error("Error al obtener detalles inmersivos:", error);
       await sendTextMessage(userPhone, "Lo siento, no pude obtener los detalles completos para este producto.");
     }
   } 
   else {
-    const product = results?.find(p => p.product_id === payload);
+    const product = results?.find(p => p.product_id == payload);
     if (!product) return;
     
     if (action === 'show_details') {
