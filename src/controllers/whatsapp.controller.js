@@ -175,7 +175,7 @@ export async function handleWhatsAppWebhook(req, res) {
       default: // GREETING u otro estado
         if (['hola', 'hey', 'buenas'].includes(userText)) {
           conversationState.set(userPhone, { state: 'AWAITING_QUERY' });
-          await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras. ¿Qué producto buscas hoy? _Si puedes, dame algunos detalles como marca, modelo o para qué lo usarás._ 😉");
+          await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras. ¿Qué producto buscas hoy? _Te hare algunas preguntas extras para poder ayudarte mejor_ 😉");
         } else {
           // Búsqueda directa (menos conversacional pero funcional)
           const directSearchData = { query: message.text.body, userId: userPhone };
