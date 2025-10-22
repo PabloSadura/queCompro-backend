@@ -1,13 +1,10 @@
 import { executeWhatsAppSearch } from '../services/orchestor/whatsapp.orchestrator.js';
 import { getProductById } from './productDetails.controller.js'; 
 import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage } from '../services/search-service/whatsapp.service.js'
+import { getEnrichedProductDetails } from '../services/search-service/productDetail.service.js';
 const conversationState = new Map();
 
-// --- LÓGICA CONVERSACIONAL (ROUTER) ---
 
-/**
- * Parsea un texto para extraer un rango de precios.
- */
 function parsePriceFromText(text) {
   const priceRegex = /(\d{1,3}(?:[.,]\d{3})*)/g;
   const numbers = (text.match(priceRegex) || []).map(n => parseInt(n.replace(/[.,]/g, '')));
@@ -18,9 +15,6 @@ function parsePriceFromText(text) {
   return {};
 }
 
-/**
- * Maneja las respuestas a botones y listas interactivas.
- */
 async function handleInteractiveReply(userPhone, message, currentStateData) {
   const { results, collectionId } = currentStateData;
   const replyId = message.interactive.list_reply?.id || message.interactive.button_reply?.id;
@@ -39,15 +33,8 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
     if (!product) return;
     await sendTextMessage(userPhone, `Buscando detalles para *${product.title}*...`);
     try {
-      let enrichedProduct;
-      const mockReq = { params: { idCollection: collectionId, idProduct: payload } };
-     
-      
-      const mockRes = { status: () => mockRes, json: (data) => { enrichedProduct = data; } };
-      
-      console.log(mockRes);
 
-      enrichedProduct = await getProductById(mockReq, mockRes);
+      const enrichedProduct = await getEnrichedProductDetails(collectionId, payload);
       
       if (!enrichedProduct) throw new Error("El servicio no devolvió un producto enriquecido.");
 

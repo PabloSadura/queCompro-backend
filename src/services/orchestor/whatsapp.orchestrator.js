@@ -31,7 +31,6 @@ export async function executeWhatsAppSearch(userPhone, searchData, conversationS
       currency: 'ARS'
     });
     
-    clearTimeout(thinkingTimeout);
     
     // Guarda el resultado en el estado de la conversación
     conversationState.set(userPhone, { 
@@ -39,7 +38,9 @@ export async function executeWhatsAppSearch(userPhone, searchData, conversationS
       results: searchResult.productos, 
       collectionId: searchResult.id 
     });
-
+    
+    clearTimeout(thinkingTimeout);
+    
     // Formatea y envía una lista interactiva al usuario
     const rows = searchResult.productos.slice(0, 10).map(prod => ({
       id: `select_product:${prod.product_id}`,
