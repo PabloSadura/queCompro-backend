@@ -1,9 +1,11 @@
-import { executeWhatsAppSearch } from '../services/orchestor/whatsapp.orchestrator.js';
-import { getProductById } from './productDetails.controller.js'; 
-import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage } from '../services/search-service/whatsapp.service.js'
-import { getEnrichedProductDetails } from '../services/search-service/productDetail.service.js';
+import { executeWhatsAppSearch } from '../services/orchestor/whatsapp.orchestrator.js'; // Ajusta la ruta si es necesario
+import { getEnrichedProductDetails } from '../services/search-service/productDetail.service.js'; // Ajusta la ruta si es necesario
+import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage } from '../services/search-service/whatsapp.service.js'; // Ajusta la ruta si es necesario
+
+// --- GESTIÓN DE ESTADO DE CONVERSACIÓN ---
 const conversationState = new Map();
 
+// --- LÓGICA CONVERSACIONAL (ROUTER) ---
 
 function parsePriceFromText(text) {
   const priceRegex = /(\d{1,3}(?:[.,]\d{3})*)/g;
@@ -29,17 +31,23 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
   
   if (action === 'select_product') {
     const product = results?.find(p => p.product_id == payload);
-    
     if (!product) return;
     await sendTextMessage(userPhone, `Buscando detalles para *${product.title}*...`);
     try {
-
+      // Llamada al servicio para enriquecer el producto
       const enrichedProduct = await getEnrichedProductDetails(collectionId, payload);
       
       if (!enrichedProduct) throw new Error("El servicio no devolvió un producto enriquecido.");
 
-      conversationState.set(userPhone, { ...currentStateData, results: enrichedProduct });
+      // ✅ CORRECCIÓN: Actualizamos el producto DENTRO del array 'results'
+      const updatedResults = results.map(p => 
+        p.product_id == payload ? enrichedProduct : p
+      );
+      // Guardamos el array actualizado en el estado
+      conversationState.set(userPhone, { ...currentStateData, results: updatedResults });
+      console.log(`[State Update] Estado actualizado para ${userPhone}. 'results' ahora es un array.`); // Log para confirmar
 
+      // Enviamos los botones de respuesta
       const buttons = [
         { type: 'reply', reply: { id: `show_details:${payload}`, title: 'Pros y Contras' } },
         { type: 'reply', reply: { id: `show_stores:${payload}`, title: 'Opciones de Compra' } },
@@ -53,9 +61,18 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
     }
   } 
   else {
-    const product = results?.find(p => p.product_id == payload);
-    if (!product) return;
+    // Para las otras acciones, 'results' ahora contendrá el producto actualizado DENTRO del array
+    console.log(`[Interactive Reply] Buscando producto en results para acción '${action}'. ¿Es 'results' un array?`, Array.isArray(results)); // Log para depurar
+    const product = Array.isArray(results) ? results.find(p => p.product_id == payload) : null;
     
+    if (!product) {
+        // Puede que el estado se haya perdido, pedimos al usuario que seleccione de nuevo
+        await sendTextMessage(userPhone, "Parece que hubo un problema o el estado de la conversación se perdió. ¿Podrías seleccionar el producto de la lista de nuevo?");
+        conversationState.delete(userPhone); // Limpiar estado incorrecto
+        return;
+    }
+    
+    // Ahora podemos acceder a los detalles enriquecidos de forma segura
     if (action === 'show_details') {
       let detailsText = `*Análisis para ${product.title}*:\n\n*✅ PROS:*\n${product.pros?.map(p => `- ${p}`).join('\n') || "No disponibles"}\n\n*❌ CONTRAS:*\n${product.contras?.map(c => `- ${c}`).join('\n') || "No disponibles"}`;
       await sendTextMessage(userPhone, detailsText);
@@ -116,7 +133,8 @@ export async function handleWhatsAppWebhook(req, res) {
         const priceData = parsePriceFromText(userText);
         const searchData = { ...currentStateData.data, ...priceData };
         conversationState.set(userPhone, { state: 'SEARCHING' });
-        executeWhatsAppSearch(userPhone, searchData, conversationState);
+        // Pasamos 'conversationState' para que el orquestador pueda actualizarlo
+        executeWhatsAppSearch(userPhone, searchData, conversationState); 
         break;
 
       default:
@@ -125,7 +143,8 @@ export async function handleWhatsAppWebhook(req, res) {
           await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras. ¿Qué producto te gustaría que analice por ti?");
         } else {
           conversationState.set(userPhone, { state: 'SEARCHING' });
-          executeWhatsAppSearch(userPhone, { query: message.text.body, userId: userPhone }, conversationState);
+          // Pasamos 'conversationState' para que el orquestador pueda actualizarlo
+          executeWhatsAppSearch(userPhone, { query: message.text.body, userId: userPhone }, conversationState); 
         }
         break;
     }
