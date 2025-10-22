@@ -1,11 +1,9 @@
-import { executeWhatsAppSearch } from '../services/orchestor/whatsapp.orchestrator.js'; // Ajusta la ruta si es necesario
-import { getEnrichedProductDetails } from '../services/search-service/productDetail.service.js'; // Ajusta la ruta si es necesario
-import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage } from '../services/search-service/whatsapp.service.js'; // Ajusta la ruta si es necesario
+import { executeWhatsAppSearch } from '../services/orchestor/whatsapp.orchestrator.js'; 
+import { getEnrichedProductDetails } from '../services/search-service/productDetail.service.js'; 
+import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage } from '../services/search-service/whatsapp.service.js'; 
 
-// --- GESTIÓN DE ESTADO DE CONVERSACIÓN ---
 const conversationState = new Map();
 
-// --- LÓGICA CONVERSACIONAL (ROUTER) ---
 
 function parsePriceFromText(text) {
   const priceRegex = /(\d{1,3}(?:[.,]\d{3})*)/g;
@@ -34,20 +32,13 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
     if (!product) return;
     await sendTextMessage(userPhone, `Buscando detalles para *${product.title}*...`);
     try {
-      // Llamada al servicio para enriquecer el producto
       const enrichedProduct = await getEnrichedProductDetails(collectionId, payload);
-      
       if (!enrichedProduct) throw new Error("El servicio no devolvió un producto enriquecido.");
-
-      // ✅ CORRECCIÓN: Actualizamos el producto DENTRO del array 'results'
       const updatedResults = results.map(p => 
         p.product_id == payload ? enrichedProduct : p
       );
-      // Guardamos el array actualizado en el estado
       conversationState.set(userPhone, { ...currentStateData, results: updatedResults });
-      console.log(`[State Update] Estado actualizado para ${userPhone}. 'results' ahora es un array.`); // Log para confirmar
-
-      // Enviamos los botones de respuesta
+      console.log(`[State Update] Estado actualizado para ${userPhone}. 'results' ahora es un array.`); 
       const buttons = [
         { type: 'reply', reply: { id: `show_details:${payload}`, title: 'Pros y Contras' } },
         { type: 'reply', reply: { id: `show_stores:${payload}`, title: 'Opciones de Compra' } },
@@ -77,28 +68,48 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
       let detailsText = `*Análisis para ${product.title}*:\n\n*✅ PROS:*\n${product.pros?.map(p => `- ${p}`).join('\n') || "No disponibles"}\n\n*❌ CONTRAS:*\n${product.contras?.map(c => `- ${c}`).join('\n') || "No disponibles"}`;
       await sendTextMessage(userPhone, detailsText);
       await setClosingState();
-    } else if (action === 'show_stores') {
+    } 
+    // Mostramos las tiendas donde comprar
+    else if (action === 'show_stores') {
       let storesText = `*Opciones de Compra para ${product.title}:*\n\n`;
       const stores = product.immersive_details?.stores;
       if (stores && Array.isArray(stores) && stores.length > 0) {
-        stores.forEach((link, index) => { storesText += `${index + 1}. ${link}\n`; });
-      } else { storesText = "Lo siento, no encontré opciones de compra para este producto."; }
+        stores.forEach((store, index) => {
+          storesText += `*${index + 1}. ${store.name || 'Tienda desconocida'}*\n`;
+          storesText += `   Precio: *${store.price || 'No disponible'}*\n`; // Añadimos fallback
+          storesText += `   Ver: ${store.link || 'No disponible'}\n\n`; // Añadimos fallback
+        });
+      } else {
+        storesText = "Lo siento, no encontré opciones de compra específicas para este producto.";
+      }
       await sendTextMessage(userPhone, storesText);
       await setClosingState();
-    } else if (action === 'show_images') {
-      await sendTextMessage(userPhone, `Aquí tienes las imágenes para *${product.title}*:`);
-      const images = product.immersive_details?.thumbnails || [product.thumbnail];
-      if (images && images.length > 0) {
-        for (const img of images.slice(0, 4)) { if (img) await sendImageMessage(userPhone, img); }
+    } 
+    //mostramos las caracteristicas
+      else if (action === 'show_features') {
+        let featuresText = `*Características de ${product.title}:*\n\n`;
+        const features = product.immersive_details?.about_the_product?.features;
+        if(features && Array.isArray(features) && features.length > 0) {
+            features.forEach(feature => {
+                featuresText += `*${feature.title || 'Característica'}*: ${feature.value || 'No disponible'}\n`;
+            });
+        } else {
+            featuresText = "Lo siento, no encontré características detalladas para este producto."
+        }
+        await sendTextMessage(userPhone, featuresText);
+        await setClosingState();
+      }
+        // Mostramos la imagen
+      else if (action === 'show_images') {
+      await sendTextMessage(userPhone, `Aquí tienes la imágen para *${product.title}*:`);
+      const images =  product.thumbnail;
+      if (images) {
+        await sendImageMessage(userPhone, images)
       } else { await sendTextMessage(userPhone, "Lo siento, no encontré imágenes adicionales."); }
       await setClosingState();
     }
   }
 }
-
-/**
- * Controlador principal del webhook que actúa como router conversacional.
- */
 export async function handleWhatsAppWebhook(req, res) {
   const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
   if (!message) return res.sendStatus(200);
