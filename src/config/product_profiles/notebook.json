@@ -1,0 +1,39 @@
+{
+  "weights": {
+    "relevance": 1.1,
+    "quality": 0.9,
+    "price": 0.9,
+    "brand": 1.2,
+    "recency": 1.4,
+    "discount": 1.0,
+    "completeness": 1.1,
+    "keyword": 1.6 
+  },
+  "brands": {
+    "apple": 20, "dell": 15, "hp": 12, "lenovo": 14, "asus": 13, "microsoft": 10, "acer": 8, "msi": 11
+  },
+  "positiveKeywords": {
+    "i9": 20, "ryzen 9": 18, "m3": 18, "m2": 15, "m1": 12, "ultra": 15, "max": 12, "pro": 10, 
+    "i7": 15, "ryzen 7": 14,
+    "gen 14": 10, "gen 13": 8, "gen 12": 5, 
+    "32gb": 15, "64gb": 20, "16gb": 10, "lpddr5": 5, "ddr5": 5,
+    "1tb ssd": 15, "2tb ssd": 20, "512gb ssd": 10, "nvme": 5,
+    "rtx 40": 25, "rtx 30": 18, "radeon rx 7": 16, "radeon rx 6": 12, "geforce": 3, "nvidia": 3,
+    "oled": 15, "mini-led": 12, "4k": 10, "qhd": 8, "240hz": 10, "165hz": 8, "144hz": 6, "120hz": 5, "ips": 3, "100% srgb": 4, "p3": 4,
+    "nuevo": 5, "liviana": 4, "ultrabook": 4, "gamer": 3, "gaming": 3, 
+    "thunderbolt": 6, "usb4": 5, "wi-fi 7": 6, "wi-fi 6e": 4,
+    "2025": 10, "2024": 8
+  },
+  "negativeKeywords": {
+    "refurbished": -40, "usado": -50, "reacondicionado": -40, "exhibicion": -30,
+    "i3": -15, "ryzen 3": -15, "celeron": -30, "pentium": -25, "athlon": -20,
+    "i5": -5, "ryzen 5": -5, 
+    "4gb": -30, "8gb": -10, 
+    "128gb ssd": -15, "256gb ssd": -5, "hdd": -25, "disco rigido": -25, "emmc": -30,
+    "intel uhd": -10, "intel iris": -8, "radeon graphics": -8, 
+    "hd": -15, "768p": -15, "tn": -20,
+    "sin sistema operativo": -5, "freedos": -5,
+    "gen 11": -5, "gen 10": -10, "gen 9": -15, "gen 8": -20, "core 2 duo": -50 
+  }
+}
+

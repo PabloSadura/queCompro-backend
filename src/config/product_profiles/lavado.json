@@ -1,0 +1,22 @@
+{
+  "weights": {
+    "relevance": 1.0,
+    "quality": 1.1,   
+    "price": 1.2,     
+    "brand": 1.3,     
+    "recency": 0.7,   
+    "discount": 1.0,
+    "completeness": 1.1,
+    "keyword": 1.2   
+  },
+  "brands": {
+    "drean": 18,
+    "lg": 16,
+    "samsung": 14,
+    "whirlpool": 12,
+    "patrick": 8,
+    "consul": 7
+  },
+  "positiveKeywords": ["inverter", "carga frontal", "automatico", "8kg", "10kg", "1200rpm", "1400rpm", "nuevo"],
+  "negativeKeywords": ["semi automatico", "carga superior", "usado"] 
+}

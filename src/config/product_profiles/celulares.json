@@ -1,0 +1,45 @@
+{
+  "weights": {
+    "relevance": 1.2,
+    "quality": 1.1,
+    "price": 0.8,
+    "brand": 1.5,
+    "recency": 1.4,
+    "discount": 0.9,
+    "completeness": 1.0,
+    "keyword": 1.4 
+  },
+  "brands": {
+    "apple": 25,
+    "samsung": 22,
+    "google": 18,
+    "xiaomi": 15,
+    "motorola": 12,
+    "oneplus": 14,
+    "oppo": 10
+  },
+  "positiveKeywords": [
+    "pro", "max", "ultra", "plus", 
+    "nuevo", "generacion", "gen", 
+    "128gb", "256gb", "512gb", "1tb",
+    "8gb", "12gb", "16gb",
+    "oled", "amoled", "120hz",
+    "5g",
+    "carga rapida",
+    "inalambrica",
+    "triple camara", "cuadruple camara", "zoom optico",
+    "2024", "2025",
+    "snapdragon 8 gen", "a16 bionic", "a17 bionic", "tensor g", 
+    "ecosistema apple", "ecosistema samsung", "ecosistema google",
+    "ia integrada", "galaxy ai", "google ai" 
+  ],
+  "negativeKeywords": [
+    "refurbished", "usado", "reacondicionado", "exhibicion",
+    "4gb", "32gb", "64gb", 
+    "lcd", "720p",
+    "sin nfc",
+    "iphone 8", "iphone x", "galaxy s9", "galaxy s10",
+    "snapdragon 6", "snapdragon 4", "mediatek helio", "exynos 9", "a13 bionic" 
+  ]
+}
+
