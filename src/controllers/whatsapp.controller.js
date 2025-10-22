@@ -41,7 +41,6 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
       const buttons = [
         { type: 'reply', reply: { id: `show_details:${payload}`, title: 'Pros y Contras' } },
         { type: 'reply', reply: { id: `show_stores:${payload}`, title: 'Opciones de Compra' } },
-        { type: 'reply', reply: { id: `show_images:${payload}`, title: 'Ver Imágenes' } },
         { type: 'reply', reply: { id: `show_features:${payload}`, title: 'Características' }}
       ];
       await sendReplyButtonsMessage(userPhone, `¡Listo! Seleccionaste: *${product.title}*.\n\n¿Qué te gustaría ver?`, buttons);
@@ -96,15 +95,7 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
         await sendTextMessage(userPhone, featuresText);
         await setClosingState();
       }
-        // Mostramos la imagen
-      else if (action === 'show_images') {
-      await sendTextMessage(userPhone, `Aquí tienes la imágen para *${product.title}*:`);
-      const images =  product.serpapi_thumbnail;
-      if (images) {
-        await sendImageMessage(userPhone, images)
-      } else { await sendTextMessage(userPhone, "Lo siento, no encontré imágenes adicionales."); }
-      await setClosingState();
-    }
+    
   }
 }
 export async function handleWhatsAppWebhook(req, res) {
