@@ -18,6 +18,10 @@ let RATING_FILTER_TBS = "mr:1,rt:4";
  */
 export async function fetchGoogleShoppingResults(userId, userQuery, countryCode, languageCode, currency, minPrice, maxPrice) {
     if (!userQuery) throw new Error("La consulta no puede estar vacía.");
+  
+    const currentYear = new Date().getFullYear();
+    const queryWithYear = userQuery.includes(currentYear.toString()) ? userQuery : `${userQuery} ${currentYear}`;
+
 
     if (minPrice && !isNaN(minPrice)) {
         RATING_FILTER_TBS += `,p_ord:pmin${minPrice}`; 
@@ -28,7 +32,7 @@ export async function fetchGoogleShoppingResults(userId, userQuery, countryCode,
 
     const params = {
         engine: "google_shopping",
-        q: userQuery,
+        q: queryWithYear,
         gl: countryCode || 'ar',
         hl: languageCode || 'es',
         currency: currency || 'ARS',

@@ -38,11 +38,11 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
         p.product_id == payload ? enrichedProduct : p
       );
       conversationState.set(userPhone, { ...currentStateData, results: updatedResults });
-      console.log(`[State Update] Estado actualizado para ${userPhone}. 'results' ahora es un array.`); 
       const buttons = [
         { type: 'reply', reply: { id: `show_details:${payload}`, title: 'Pros y Contras' } },
         { type: 'reply', reply: { id: `show_stores:${payload}`, title: 'Opciones de Compra' } },
         { type: 'reply', reply: { id: `show_images:${payload}`, title: 'Ver Imágenes' } },
+        { type: 'reply', reply: { id: `show_features:${payload}`, title: 'Características' }}
       ];
       await sendReplyButtonsMessage(userPhone, `¡Listo! Seleccionaste: *${product.title}*.\n\n¿Qué te gustaría ver?`, buttons);
 
@@ -52,18 +52,15 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
     }
   } 
   else {
-    // Para las otras acciones, 'results' ahora contendrá el producto actualizado DENTRO del array
-    console.log(`[Interactive Reply] Buscando producto en results para acción '${action}'. ¿Es 'results' un array?`, Array.isArray(results)); // Log para depurar
+   Array.isArray(results); 
     const product = Array.isArray(results) ? results.find(p => p.product_id == payload) : null;
     
     if (!product) {
-        // Puede que el estado se haya perdido, pedimos al usuario que seleccione de nuevo
         await sendTextMessage(userPhone, "Parece que hubo un problema o el estado de la conversación se perdió. ¿Podrías seleccionar el producto de la lista de nuevo?");
-        conversationState.delete(userPhone); // Limpiar estado incorrecto
+        conversationState.delete(userPhone); 
         return;
     }
     
-    // Ahora podemos acceder a los detalles enriquecidos de forma segura
     if (action === 'show_details') {
       let detailsText = `*Análisis para ${product.title}*:\n\n*✅ PROS:*\n${product.pros?.map(p => `- ${p}`).join('\n') || "No disponibles"}\n\n*❌ CONTRAS:*\n${product.contras?.map(c => `- ${c}`).join('\n') || "No disponibles"}`;
       await sendTextMessage(userPhone, detailsText);
@@ -102,7 +99,7 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
         // Mostramos la imagen
       else if (action === 'show_images') {
       await sendTextMessage(userPhone, `Aquí tienes la imágen para *${product.title}*:`);
-      const images =  product.thumbnail;
+      const images =  product.serpapi_thumbnail;
       if (images) {
         await sendImageMessage(userPhone, images)
       } else { await sendTextMessage(userPhone, "Lo siento, no encontré imágenes adicionales."); }
@@ -149,12 +146,11 @@ export async function handleWhatsAppWebhook(req, res) {
         break;
 
       default:
-        if (['hola', 'hey', 'buenas'].includes(userText)) {
+        if (['hola', 'hey', 'buenas', 'buenas tardes', 'buenas noches', 'buen dia'].includes(userText)) {
           conversationState.set(userPhone, { state: 'AWAITING_QUERY' });
           await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras. ¿Qué producto te gustaría que analice por ti?");
         } else {
-          conversationState.set(userPhone, { state: 'SEARCHING' });
-          // Pasamos 'conversationState' para que el orquestador pueda actualizarlo
+          conversationState.set(userPhone, { state: 'SEARCHING' }); 
           executeWhatsAppSearch(userPhone, { query: message.text.body, userId: userPhone }, conversationState); 
         }
         break;
