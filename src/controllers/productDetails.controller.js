@@ -6,7 +6,8 @@ export async function getProductById(req, res) {
     const { idCollection, idProduct } = req.params;
     try{
 
-        const updatedProduct = getEnrichedProductDetails(idCollection, idProduct);
+        const updatedProduct = await getEnrichedProductDetails(idCollection, idProduct);
+        
         res.status(200).json(updatedProduct);
     }   
      catch (err) {

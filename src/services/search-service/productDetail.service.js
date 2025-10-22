@@ -24,6 +24,7 @@ export async function getEnrichedProductDetails(collectionId, productId) {
   // 2. Si ya tiene los detalles, los devolvemos (actúa como caché).
   if (product.immersive_details) {
     console.log(`[DB Cache Hit] Devolviendo detalles para el producto: ${productId}`);
+
     return product;
   }
 
