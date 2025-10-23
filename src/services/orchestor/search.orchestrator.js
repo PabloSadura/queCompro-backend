@@ -1,9 +1,9 @@
 // ✅ Importamos el motor de reglas local
-import { analyzeShoppingResults } from '../services/search-service/analysisService.js';
+import { analyzeShoppingResults } from '../search-service/ia.service.js';
 // ❌ Quitamos la importación de getBestRecommendationFromAI (Gemini)
-import { fetchGoogleShoppingResults } from '../services/search-service/googleSopphing.js';
-import { saveSearchToFirebase } from '../services/search-service/firebaseService.js';
-import logicFusion from './logis.controller.js';
+import { fetchGoogleShoppingResults } from '../search-service/googleSopphing.service.js';
+import { saveSearchToFirebase } from '../search-service/firebaseService.service.js';
+import logicFusion from '../../controllers/logis.controller.js';
 
 /**
  * Orquesta el flujo de búsqueda principal.

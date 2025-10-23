@@ -1,6 +1,6 @@
-import { executeLocalAnalysisSearch, executeAdvancedAIAnalysis } from './whatsapp.orchestrator.js';
+import { executeLocalAnalysisSearch, executeAdvancedAIAnalysis } from '../services/orchestor/whatsapp.orchestrator.js';
 import { getEnrichedProductDetails } from '../services/search-service/productDetail.service.js';
-import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage, sendListMessage } from '../services/whatsapp.service.js';
+import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage, sendListMessage } from '../services/search-service/whatsapp.service.js';
 
 // --- GESTIÓN DE ESTADO DE CONVERSACIÓN ---
 const conversationState = new Map();
