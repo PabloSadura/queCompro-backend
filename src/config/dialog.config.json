@@ -1,0 +1,37 @@
+{
+  "categories": [
+    { "id": "celular", "title": "📱 Celulares", "query": "celular" },
+    { "id": "notebook", "title": "💻 Notebooks", "query": "notebook" },
+    { "id": "televisor", "title": "📺 Televisores", "query": "televisor" },
+    { "id": "heladera", "title": "🧊 Heladeras", "query": "heladera" },
+    { "id": "lavarropas", "title": "🧺 Lavarropas", "query": "lavarropas" },
+    { "id": "auriculares", "title": "🎧 Auriculares", "query": "auriculares" },
+    { "id": "smartwatch", "title": "⌚ Smartwatches", "query": "smartwatch" },
+    { "id": "cocina", "title": "🍳 Cocinas", "query": "cocina" },
+    { "id": "microondas", "title": "🔥 Microondas", "query": "microondas" },
+    { "id": "otros", "title": "🔍 Otros (Escribir)", "query": "" }
+  ],
+  "brandSuggestions": {
+    "celular": [
+      { "id": "samsung", "title": "Samsung" },
+      { "id": "apple", "title": "Apple" },
+      { "id": "motorola", "title": "Motorola" }
+    ],
+    "notebook": [
+      { "id": "hp", "title": "HP" },
+      { "id": "lenovo", "title": "Lenovo" },
+      { "id": "dell", "title": "Dell" }
+    ],
+    "televisor": [
+      { "id": "samsung", "title": "Samsung" },
+      { "id": "lg", "title": "LG" },
+      { "id": "philips", "title": "Philips" }
+    ],
+    "heladera": [
+      { "id": "samsung", "title": "Samsung" },
+      { "id": "whirlpool", "title": "Whirlpool" },
+      { "id": "patrick", "title": "Patrick" }
+    ],
+    "default": []
+  }
+}
