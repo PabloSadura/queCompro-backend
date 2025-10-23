@@ -42,7 +42,7 @@ export async function executeWhatsAppSearch(userPhone, searchData, conversationS
     await sendTextMessage(userPhone, "Encontré varios productos. Analizando con IA (Gemini)... 🧠");
 
     // 2. Analizar con Gemini
-    const aiAnalysis = await getBestRecommendationFromAI(query, shoppingResults);
+    const aiAnalysis = await getBestRecommendationFromGemini(query, shoppingResults);
     
     clearTimeout(thinkingTimeout); // Detenemos el mensaje de "sigo pensando"
 

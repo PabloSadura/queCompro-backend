@@ -7,6 +7,9 @@ const conversationState = new Map();
 
 // --- FUNCIONES AUXILIARES ---
 
+/**
+ * Parsea un texto para extraer un rango de precios.
+ */
 function parsePriceFromText(text) {
   const priceRegex = /(\d{1,3}(?:[.,]\d{3})*)/g;
   const numbers = (text.match(priceRegex) || []).map(n => parseInt(n.replace(/[.,]/g, '')));
@@ -16,8 +19,11 @@ function parsePriceFromText(text) {
   return {};
 }
 
+/**
+ * Maneja las respuestas a botones y listas interactivas.
+ */
 async function handleInteractiveReply(userPhone, message, currentStateData) {
-  const { results, collectionId, state } = currentStateData;
+  const { results, collectionId, state, data: searchContext } = currentStateData;
   const reply = message.interactive.list_reply || message.interactive.button_reply; 
   if (!reply || !reply.id) return;
 
@@ -34,8 +40,36 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
     conversationState.set(userPhone, { ...currentStateData, state: 'AWAITING_POST_DETAIL_ACTION' });
   };
   
+  // --- Manejo de Acciones Interactivas ---
+
+  // PASO 2: Respuesta a la selección de categoría
+  if (state === 'AWAITING_CATEGORY' && action === 'select_category') {
+      const category = payload;
+      const categoryTitle = reply.title; 
+      
+      if (category === 'otros') {
+        // Si elige "Otros", preguntamos qué producto busca
+        conversationState.set(userPhone, {
+            state: 'AWAITING_CUSTOM_QUERY', // Estado para consulta personalizada
+            data: { category: 'default', userId: userPhone } 
+        });
+        await sendTextMessage(userPhone, `¡Entendido! Por favor, dime qué producto te gustaría buscar (ej: "zapatillas para correr")`);
+      } else {
+        // Si elige una categoría, guardamos la categoría y el nombre del producto
+        conversationState.set(userPhone, {
+            state: 'AWAITING_PRODUCT_NAME', // PASO 3: Preguntar nombre/modelo
+            data: { 
+                query: categoryTitle.replace(/[\u{1F600}-\u{1F64F}]/gu, '').trim(), // Usa el título del botón como query base
+                category: category, 
+                userId: userPhone 
+            }
+        });
+        await sendTextMessage(userPhone, `¡Perfecto! Buscaremos en *${categoryTitle}*. ¿Qué marca o modelo específico te interesa? (ej: "Samsung S24 Ultra", "iPhone 15")`);
+      }
+      return;
+  }
   // Selección de producto de la lista
-  if (action === 'select_product') {
+  else if (action === 'select_product') {
     const product = results?.find(p => p.product_id == payload);
     if (!product) return;
     await sendTextMessage(userPhone, `Buscando detalles para *${product.title}*...`);
@@ -102,11 +136,28 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
 }
 
 /**
- * Función separada para manejar el saludo
+ * Función separada para manejar el saludo (PASO 1)
  */
 async function handleGreeting(userPhone, userId) {
-    conversationState.set(userPhone, { state: 'AWAITING_QUERY', data: { userId: userId } });
-    await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras. ¿Qué producto te gustaría que analice por ti hoy?");
+    // PASO 2: Presenta la lista de categorías
+    conversationState.set(userPhone, { state: 'AWAITING_CATEGORY', data: { userId: userId } });
+    
+    const categories = [
+        { id: "celular", title: "📱 Celulares"},
+        { id: "notebook", title: "💻 Notebooks"},
+        { id: "televisor", title: "📺 Televisores"},
+        { id: "heladera", title: "🧊 Heladeras"},
+        { id: "lavarropas", title: "🧺 Lavarropas"},
+        { id: "auriculares", title: "🎧 Auriculares"},
+        { id: "smartwatch", title: "⌚ Smartwatches"},
+        { id: "cocina", title: "🍳 Cocinas"},
+        { id: "microondas", title: "🔥 Microondas"},
+        { id: "otros", title: "🔍 Otros (Escribir)"} // Opción para escribir
+    ];
+    const rows = categories.map(cat => ({ id: `select_category:${cat.id}`, title: cat.title }));
+
+    await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras.");
+    await sendListMessage(userPhone, "Elige una Categoría", "¿En qué tipo de producto estás interesado hoy?", "Categorías", [{ title: "Categorías Populares", rows }]);
 }
 
 /**
@@ -141,28 +192,52 @@ export async function handleWhatsAppWebhook(req, res) {
         return;
     }
 
-    // --- Flujo conversacional simple ---
+    // --- Flujo conversacional guiado ---
     switch (currentStateData.state) {
-        // PASO 2: El usuario responde a "¿Qué buscas?"
-        case 'AWAITING_QUERY':
+        // Usuario escribe la categoría en lugar de usar la lista
+        case 'AWAITING_CATEGORY':
+             conversationState.set(userPhone, {
+                state: 'AWAITING_BRAND', // Pasa a preguntar la marca
+                data: { ...currentSearchData, query: userText, category: userText.toLowerCase() }
+            });
+            await sendTextMessage(userPhone, `¡Perfecto! Buscaremos en *${userText.toUpperCase()}*. ¿Tienes alguna marca en mente? (ej: "Samsung", o escribe "ninguna")`);
+            break;
+
+        // Usuario escribe el producto después de "Otros"
+        case 'AWAITING_CUSTOM_QUERY':
+            currentSearchData.query = userText;
+            conversationState.set(userPhone, { state: 'AWAITING_BRAND', data: currentSearchData });
+            await sendTextMessage(userPhone, `¡Entendido! Buscaremos "${userText}". ¿Alguna marca en mente? (o "ninguna")`);
+            break;
+            
+        // Usuario escribe el nombre del producto después de elegir categoría
+        case 'AWAITING_PRODUCT_NAME':
+            currentSearchData.query = userText; // Sobrescribe la query base con el producto específico
+            conversationState.set(userPhone, { state: 'AWAITING_BRAND', data: currentSearchData });
+            await sendTextMessage(userPhone, '¡Perfecto! ¿Tienes alguna marca en mente? (ej: "Samsung", o escribe "ninguna")');
+            break;
+
+        // PASO 3: Usuario escribe la marca
+        case 'AWAITING_BRAND':
+            currentSearchData.brandPreference = userText;
+            conversationState.set(userPhone, { state: 'AWAITING_PRICE_RANGE', data: currentSearchData });
+            await sendTextMessage(userPhone, `¡Anotado! ¿Tienes algún rango de precios? (ej: "hasta 150000", o "no")`);
+            break;
+
+        // PASO 4: Usuario escribe el precio
+        case 'AWAITING_PRICE_RANGE':
             const priceData = parsePriceFromText(userText.toLowerCase());
-            const searchData = { 
-                ...currentSearchData, 
-                query: userText, 
-                ...priceData, 
-                category: 'default' // Categoría por defecto
-            };
-            conversationState.set(userPhone, { state: 'SEARCHING', data: searchData });
-            // PASO 3: Ejecutar búsqueda y análisis IA
-            executeWhatsAppSearch(userPhone, searchData, conversationState);
+            const searchDataWithPrice = { ...currentSearchData, ...priceData };
+            conversationState.set(userPhone, { state: 'SEARCHING', data: searchDataWithPrice });
+            // PASO 5: Ejecutar búsqueda y análisis
+            executeWhatsAppSearch(userPhone, searchDataWithPrice, conversationState);
             break;
         
-        default: // GREETING o AWAITING_PRODUCT_SELECTION
-            // PASO 1: El usuario envía "hola"
+        default: // GREETING (PASO 1)
             if (['hola', 'hey', 'buenas'].includes(userText.toLowerCase())) {
                 handleGreeting(userPhone, userPhone);
             } else {
-                // Búsqueda directa (el usuario no saludó, mandó la query de una)
+                // Búsqueda directa (como fallback)
                 const directPriceData = parsePriceFromText(userText.toLowerCase());
                 const directSearchData = { 
                     ...currentSearchData, 
@@ -192,4 +267,3 @@ export function verifyWhatsAppWebhook(req, res) {
     res.sendStatus(403);
   }
 }
-
