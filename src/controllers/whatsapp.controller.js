@@ -197,7 +197,7 @@ export async function handleWhatsAppWebhook(req, res) {
         // Usuario escribe la categoría en lugar de usar la lista
         case 'AWAITING_CATEGORY':
              conversationState.set(userPhone, {
-                state: 'AWAITING_BRAND', // Pasa a preguntar la marca
+                state: 'AWAITING_PRODUCT_NAME', // Pasa a preguntar la marca
                 data: { ...currentSearchData, query: userText, category: userText.toLowerCase() }
             });
             await sendTextMessage(userPhone, `¡Perfecto! Buscaremos en *${userText.toUpperCase()}*. ¿Tienes alguna marca en mente? (ej: "Samsung", o escribe "ninguna")`);
@@ -206,8 +206,8 @@ export async function handleWhatsAppWebhook(req, res) {
         // Usuario escribe el producto después de "Otros"
         case 'AWAITING_CUSTOM_QUERY':
             currentSearchData.query = userText;
-            conversationState.set(userPhone, { state: 'AWAITING_BRAND', data: currentSearchData });
-            await sendTextMessage(userPhone, `¡Entendido! Buscaremos "${userText}". ¿Alguna marca en mente? (o "ninguna")`);
+            conversationState.set(userPhone, { state: 'AWAITING_PRODUCT_NAME', data: currentSearchData });
+            await sendTextMessage(userPhone, `¡Perfecto! Buscaremos en *${userText.toUpperCase()}*. ¿Tienes alguna marca en mente? (ej: "Samsung", "Iphone", o escribe "ninguna")`);
             break;
             
         // Usuario escribe el nombre del producto después de elegir categoría
@@ -216,30 +216,22 @@ export async function handleWhatsAppWebhook(req, res) {
             const baseQuery = currentSearchData.query || '';
             const specificProduct = userText;
             currentSearchData.query = `${baseQuery} ${specificProduct}`; // Ej: "Celulares iPhone 15 Pro"
-            
-            conversationState.set(userPhone, { state: 'AWAITING_BRAND', data: currentSearchData });
-            // Confirmamos la búsqueda completa
-            await sendTextMessage(userPhone, `¡Perfecto! Buscaremos "${currentSearchData.query}". ¿Tienes alguna marca en mente? (ej: "Samsung", o escribe "ninguna")`);
-            break;
-
-        // PASO 3: Usuario escribe la marca
-        case 'AWAITING_BRAND':
-            currentSearchData.brandPreference = userText;
             conversationState.set(userPhone, { state: 'AWAITING_PRICE_RANGE', data: currentSearchData });
+            // Confirmamos la búsqueda completa
             await sendTextMessage(userPhone, `¡Anotado! ¿Tienes algún rango de precios? (ej: "hasta 150000", o "no")`);
             break;
 
-        // PASO 4: Usuario escribe el precio
+        // PASO 3: Usuario escribe el precio
         case 'AWAITING_PRICE_RANGE':
             const priceData = parsePriceFromText(userText.toLowerCase());
             const searchDataWithPrice = { ...currentSearchData, ...priceData };
             conversationState.set(userPhone, { state: 'SEARCHING', data: searchDataWithPrice });
-            // PASO 5: Ejecutar búsqueda y análisis
+            // PASO 4: Ejecutar búsqueda y análisis
             executeWhatsAppSearch(userPhone, searchDataWithPrice, conversationState);
             break;
         
         default: // GREETING (PASO 1)
-            if (['hola', 'hey', 'buenas'].includes(userText.toLowerCase())) {
+            if (['hola', 'hey', 'buenas','ey'].includes(userText.toLowerCase())) {
                 handleGreeting(userPhone, userPhone);
             } else {
                 // Búsqueda directa (como fallback)
