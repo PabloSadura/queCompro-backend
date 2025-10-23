@@ -1,150 +1,161 @@
-// Importamos el orquestador principal que contiene la lógica de búsqueda
-import { performSearchLogic as runSearchAndRecommendation} from './search.orchestrator.js'; // Ajusta la ruta si es necesario
-// Importamos los servicios de envío de WhatsApp
-import { sendTextMessage, sendListMessage } from '../search-service/whatsapp.service.js'; // Ajusta la ruta si es necesario
+// Importa todos los servicios de lógica de negocio
+import { getBestRecommendationFromGemini } from '../search-service/geminiService.service.js';
+import { analyzeShoppingResults } from '../search-service/ia.service.js';
+import { fetchGoogleShoppingResults } from '../search-service/googleSopphing.service.js';
+import { saveSearchToFirebase } from '../search-service/firebaseService.service.js';
+import logicFusion from '../../controllers/logis.controller.js';
+// Importa los servicios de envío de WhatsApp
+import { sendTextMessage, sendReplyButtonsMessage, sendListMessage } from '../search-service/whatsapp.service.js';
 
 /**
- * Orquesta el flujo completo de una búsqueda de producto iniciada desde WhatsApp.
- * Ahora acepta más parámetros de búsqueda recolectados en la conversación.
- * @param {string} userPhone - El número de teléfono del usuario.
- * @param {object} searchData - Contiene query, userId, minPrice, maxPrice, usage, brandPreference, ratingFilter, featureKeyword.
- * @param {Map} conversationState - El mapa del estado de la conversación para guardar el resultado.
+ * PASO 5: Busca, analiza con el motor de reglas local y pregunta si se desea análisis IA.
  */
-export async function executeWhatsAppSearch(userPhone, searchData, conversationState) {
+export async function executeLocalAnalysisSearch(userPhone, searchData, conversationState) {
   let thinkingTimeout = null;
   try {
     const {
         query,
-        userId, // Asegúrate de que el userId se pase correctamente desde el controller
+        userId,
         minPrice,
         maxPrice,
-        usage, // Uso específico (ej: gaming)
-        brandPreference, // Marca preferida/evitada
-        ratingFilter, // Booleano para filtrar por rating
-        featureKeyword // Palabra clave de característica
+        category, // Categoría seleccionada por el usuario
+        brandPreference,
+        ratingFilter,
+        featureKeyword
     } = searchData;
 
     // --- Construcción de la Consulta Enriquecida ---
     let finalQuery = query;
-    if (usage) finalQuery += ` para ${usage}`;
     if (brandPreference && brandPreference.toLowerCase() !== 'ninguna') {
-        finalQuery += ` ${brandPreference}`; // Podría mejorarse para manejar exclusión ("evitar X")
+        finalQuery += ` ${brandPreference}`;
     }
     if (featureKeyword) finalQuery += ` ${featureKeyword}`;
-    // --- Fin Construcción ---
-
-    let searchingText = `¡Entendido! Buscando "${finalQuery}"`; // Usamos la query enriquecida
+    
+    let searchingText = `¡Entendido! Buscando "${finalQuery}"`;
     if (maxPrice) searchingText += ` hasta $${maxPrice}`;
     if (minPrice) searchingText += ` desde $${minPrice}`;
     if (ratingFilter) searchingText += ` con buena valoración`;
     searchingText += `... 🕵️‍♂️`;
-
+    
     await sendTextMessage(userPhone, searchingText);
+    
+    // --- LÓGICA DE BÚSQUEDA LOCAL ---
+    const { products: shoppingResults, totalResults } = await fetchGoogleShoppingResults(
+        userId, finalQuery, 'ar', 'es', 'ARS', minPrice, maxPrice, ratingFilter
+    );
 
-    thinkingTimeout = setTimeout(() => {
-      sendTextMessage(userPhone, "El análisis está tardando un poco más de lo normal, pero sigo trabajando en ello... 🤓");
-    }, 20000); // 20 segundos
+    if (!shoppingResults || shoppingResults.length === 0) {
+      await sendTextMessage(userPhone, "Lo siento, no encontré productos con esos criterios.");
+      conversationState.delete(userPhone);
+      return;
+    }
 
-    // --- DELEGACIÓN AL ORQUESTADOR PRINCIPAL ---
-    // Pasamos todos los datos recolectados, incluyendo los nuevos filtros
-    const searchResult = await runSearchAndRecommendation({
-      query: finalQuery, // Usamos la query enriquecida
-      userId,
-      minPrice,
-      maxPrice,
-      countryCode: 'ar', // Fijo para WhatsApp por ahora
-      languageCode: 'es',// Fijo para WhatsApp por ahora
-      currency: 'ARS',   // Fijo para WhatsApp por ahora
-      ratingFilter // Pasamos el filtro de rating si el usuario lo seleccionó
-    });
-    // --- Fin Delegación ---
+    await sendTextMessage(userPhone, "Encontré varios productos. Realizando un análisis rápido...");
+    const localAnalysis = analyzeShoppingResults(finalQuery, shoppingResults, category);
 
-    clearTimeout(thinkingTimeout);
+    if (!localAnalysis || !localAnalysis.productos_analisis || localAnalysis.productos_analisis.length === 0) {
+        await sendTextMessage(userPhone, "No pude realizar un análisis preliminar. ¿Quieres intentar con otra búsqueda?");
+        conversationState.delete(userPhone);
+        return;
+    }
 
-    // Guarda el resultado en el estado de la conversación para usarlo en handleInteractiveReply
-    conversationState.set(userPhone, {
-      state: 'AWAITING_PRODUCT_SELECTION',
-      results: searchResult.productos, // Array de productos ya analizados y marcados
-      collectionId: searchResult.id,   // ID de la búsqueda guardada
-      data: searchData // Guardamos los criterios originales por si los necesitamos
-    });
-
-    // Formatea y envía una lista interactiva al usuario
-    const rows = searchResult.productos.slice(0, 10).map(prod => ({ // WhatsApp soporta máx 10 items en lista
-      id: `select_product:${prod.product_id}`,
-      title: prod.title.substring(0, 24), // Título corto para la lista
-      description: `Precio: ${prod.price}`.substring(0, 72) // Descripción corta
+    const locallyAnalyzedProducts = logicFusion(shoppingResults, localAnalysis).map(p => ({
+        ...p,
+        isRecommended: localAnalysis.productos_analisis.find(a => a.product_id === p.product_id)?.isRecommended || false,
+        pros: localAnalysis.productos_analisis.find(a => a.product_id === p.product_id)?.pros,
+        contras: localAnalysis.productos_analisis.find(a => a.product_id === p.product_id)?.contras,
     }));
+    
+    const finalRecommendation = {
+        recomendacion_final: localAnalysis.recomendacion_final,
+        productos: locallyAnalyzedProducts,
+        total_results: totalResults,
+    };
+    
+    const { id: collectionId } = await saveSearchToFirebase(finalQuery, userId, finalRecommendation);
 
-    await sendListMessage(userPhone, `Análisis para "${query}"`, `¡Listo! Mi recomendación principal es:\n\n${searchResult.recomendacion_final}\n\nSelecciona una opción para ver más detalles.`, "Ver Opciones", [{ title: "Productos Recomendados", rows }]);
+    // Guarda el estado para el siguiente paso (Confirmación de IA)
+    conversationState.set(userPhone, {
+      state: 'AWAITING_AI_CONFIRMATION',
+      results: locallyAnalyzedProducts,
+      originalShoppingResults: shoppingResults, // Guardamos los resultados crudos para la IA
+      collectionId: collectionId,
+      data: searchData
+    });
+
+    // Envía el resultado local y la pregunta de confirmación
+    let preliminaryResultText = `*Análisis Preliminar para "${query}":*\n\n`;
+    preliminaryResultText += `Basado en mi motor de reglas, te recomiendo:\n*${localAnalysis.recomendacion_final}*\n\n`;
+    preliminaryResultText += "Top 5 Productos que encontré:\n";
+    locallyAnalyzedProducts.slice(0, 5).forEach((p, i) => {
+        preliminaryResultText += `${i + 1}. ${p.title} (${p.price})\n`;
+    });
+    
+    const confirmationButtons = [
+      { type: 'reply', reply: { id: `ai_confirm:yes`, title: 'Sí, analizar con IA ✨' } },
+      { type: 'reply', reply: { id: `ai_confirm:no`, title: 'No, gracias 👋' } },
+    ];
+    await sendTextMessage(userPhone, preliminaryResultText);
+    await sendReplyButtonsMessage(userPhone, "¿Quieres que mi IA avanzada (Gemini) analice estos productos para darte una recomendación más detallada?", confirmationButtons.slice(0,3));
 
   } catch (error) {
     if (thinkingTimeout) clearTimeout(thinkingTimeout);
-    console.error("Error en executeWhatsAppSearch:", error.message);
-    await sendTextMessage(userPhone, `Lo siento, ocurrió un error inesperado durante la búsqueda: ${error.message}`);
-    // Limpiamos el estado si la búsqueda falla para evitar bucles
+    console.error("Error en executeLocalAnalysisSearch:", error.message);
+    await sendTextMessage(userPhone, `Lo siento, ocurrió un error inesperado durante la búsqueda inicial.`);
     conversationState.delete(userPhone);
   }
 }
 
 /**
- * Ejecuta el análisis avanzado con la IA externa (Gemini/OpenAI).
- * Esta función se llama desde el controlador cuando el usuario confirma.
+ * PASO 7: Ejecuta el análisis avanzado con Gemini/IA.
  */
 export async function executeAdvancedAIAnalysis(userPhone, currentStateData) {
     const { originalShoppingResults, data: searchData, collectionId } = currentStateData;
-    const { query } = searchData; // Usa la query original para la IA
+    const { query } = searchData;
     let thinkingTimeout = null;
 
     try {
         await sendTextMessage(userPhone, "¡Perfecto! Iniciando el análisis avanzado con IA... Esto puede tardar unos segundos... 🧠");
         thinkingTimeout = setTimeout(() => {
-          sendTextMessage(userPhone, "El análisis IA está tardando un poco más, pero sigo trabajando... 🤓");
-        }, 20000); // 20 segundos
+          sendTextMessage(userPhone, "El análisis de IA está tardando un poco más, pero sigo trabajando... 🤓");
+        }, 20000);
 
-        // Llama al servicio de IA externo (Gemini con fallback)
-        // Le pasamos los resultados ORIGINALES de shopping
-        const aiAnalysis = await getBestRecommendationFromAI(query, originalShoppingResults);
-
+        const aiAnalysis = await getBestRecommendationFromGemini(query, originalShoppingResults);
         clearTimeout(thinkingTimeout);
 
         if (!aiAnalysis || !aiAnalysis.productos_analisis) {
           throw new Error("No se pudo obtener un análisis válido de la IA externa.");
         }
 
-        // Fusiona los resultados originales con el análisis PROFUNDO de la IA
         const finalProducts = logicFusion(originalShoppingResults, aiAnalysis).map(p => ({
             ...p,
             isRecommended: aiAnalysis.productos_analisis.find(a => a.product_id === p.product_id)?.isRecommended || false,
-             // Añadimos pros/contras de la IA
             pros: aiAnalysis.productos_analisis.find(a => a.product_id === p.product_id)?.pros,
             contras: aiAnalysis.productos_analisis.find(a => a.product_id === p.product_id)?.contras,
         }));
 
-        // Actualiza Firebase con los detalles de la IA (opcional, pero recomendado)
-        // await updateProductsInFirebase(collectionId, finalProducts); // Necesitarías esta función
+        // TODO Opcional: Actualizar los productos en Firebase con los datos de la IA
+        // await updateProductsInFirebase(collectionId, finalProducts);
 
-        // Guarda el resultado final en el estado
         conversationState.set(userPhone, {
             state: 'AWAITING_PRODUCT_SELECTION',
-            results: finalProducts, // Ahora guarda los productos analizados por la IA
+            results: finalProducts,
             collectionId: collectionId,
             data: searchData
         });
 
-        // Envía la lista interactiva con los resultados finales
         const rows = finalProducts.slice(0, 10).map(prod => ({
           id: `select_product:${prod.product_id}`,
           title: prod.title.substring(0, 24),
           description: `Precio: ${prod.price}`.substring(0, 72)
         }));
-        await sendListMessage(userPhone, `Análisis IA para "${query}"`, `¡Listo! Mi recomendación final es:\n\n${aiAnalysis.recomendacion_final}\n\nSelecciona una opción para ver más detalles.`, "Ver Opciones", [{ title: "Productos Analizados por IA", rows }]);
+        await sendListMessage(userPhone, `Análisis IA para "${query}"`, `¡Listo! Mi recomendación final de IA es:\n\n${aiAnalysis.recomendacion_final}\n\nSelecciona una opción para ver más detalles.`, "Ver Opciones", [{ title: "Productos Analizados por IA", rows }]);
 
     } catch (error) {
         if (thinkingTimeout) clearTimeout(thinkingTimeout);
         console.error("Error en executeAdvancedAIAnalysis:", error.message);
         await sendTextMessage(userPhone, `Lo siento, ocurrió un error durante el análisis avanzado.`);
-        conversationState.delete(userPhone); // Limpia estado en caso de error grave
+        conversationState.delete(userPhone);
     }
 }
 

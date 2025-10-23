@@ -10,6 +10,7 @@ const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMB
  * eliminando el '9' de los números móviles de Argentina si está presente.
  */
 function normalizePhoneNumber(phone) {
+  // Ej: Convierte '54911...' a '5411...'
   if (phone.startsWith('549') && phone.length === 13) {
     return '54' + phone.substring(3);
   }
@@ -30,7 +31,8 @@ async function sendWhatsAppRequest(requestBody) {
       }
     });
   } catch (error) {
-    console.error("❌ Error al enviar mensaje de WhatsApp:", error.response?.data || error.message);
+    // Registra el error detallado de la API de Meta
+    console.error("❌ Error al enviar mensaje de WhatsApp. Respuesta de Meta:", error.response?.data?.error || error.message);
   }
 }
 
@@ -42,14 +44,14 @@ export function sendTextMessage(to, text) {
 }
 
 /**
- * Envía una imagen con una descripción opcional.
+ * Envía una imagen desde una URL pública.
  */
 export function sendImageMessage(to, imageUrl, caption = '') {
   return sendWhatsAppRequest({ to, type: "image", image: { link: imageUrl, caption }, messaging_product: "whatsapp" });
 }
 
 /**
- * Envía un mensaje de lista interactiva.
+ * Envía un mensaje de lista interactivo (máx. 10 items).
  */
 export function sendListMessage(to, headerText, bodyText, buttonText, sections) {
   return sendWhatsAppRequest({
@@ -66,7 +68,7 @@ export function sendListMessage(to, headerText, bodyText, buttonText, sections) 
 }
 
 /**
- * Envía un mensaje con botones de respuesta.
+ * Envía un mensaje con botones de respuesta (máx. 3 botones).
  */
 export function sendReplyButtonsMessage(to, bodyText, buttons) {
   return sendWhatsAppRequest({

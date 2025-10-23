@@ -1,12 +1,11 @@
-// Importaciones
-import { executeWhatsAppSearch, executeAdvancedAIAnalysis } from '../services/orchestor/whatsapp.orchestrator.js'; // Ajusta la ruta si es necesario
-import { getEnrichedProductDetails } from '../services/search-service/productDetail.service.js'; // Ajusta la ruta si es necesario
-import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage, sendListMessage } from '../services/search-service/whatsapp.service.js'; // Ajusta la ruta si es necesario
+import { executeLocalAnalysisSearch, executeAdvancedAIAnalysis } from '../services/orchestor/whatsapp.orchestrator.js';
+import { getEnrichedProductDetails } from '../services/search-service/productDetail.service.js';
+import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage, sendListMessage } from '../services/search-service/whatsapp.service.js';
 
 // --- GESTIÓN DE ESTADO DE CONVERSACIÓN ---
 const conversationState = new Map();
 
-// --- FUNCIONES AUXILIARES (parsePriceFromText, handleInteractiveReply adaptadas) ---
+// --- FUNCIONES AUXILIARES ---
 
 /**
  * Parsea un texto para extraer un rango de precios.
@@ -25,68 +24,47 @@ function parsePriceFromText(text) {
  */
 async function handleInteractiveReply(userPhone, message, currentStateData) {
   const { results, collectionId, data: searchContext, state } = currentStateData;
-  const replyId = message.interactive.list_reply?.id || message.interactive.button_reply?.id;
-  if (!replyId) return;
+  const reply = message.interactive.list_reply || message.interactive.button_reply; 
+  if (!reply || !reply.id) return;
 
+  const replyId = reply.id;
   const [action, payload] = replyId.split(':');
 
   const setClosingState = async () => {
-    // Pregunta Post-Detalles
     const buttons = [
-        { type: 'reply', reply: { id: `post_action:next_option`, title: 'Ver otra opción 📄' } },
         { type: 'reply', reply: { id: `post_action:new_search`, title: 'Buscar algo más 🔎' } },
         { type: 'reply', reply: { id: `post_action:end`, title: 'No, gracias 👋' } },
     ];
-    // Aseguramos que solo se envíen 3 botones como máximo
-    await sendReplyButtonsMessage(userPhone, "¿Qué te pareció este producto? ¿Te gustaría ver otra opción de la lista o buscar algo diferente?", buttons.slice(0, 3));
+    await sendReplyButtonsMessage(userPhone, "¿Puedo ayudarte en algo más?", buttons.slice(0,3));
     conversationState.set(userPhone, { ...currentStateData, state: 'AWAITING_POST_DETAIL_ACTION' });
   };
 
   // --- Manejo de Acciones Interactivas ---
 
-  // Respuesta a la selección de categoría
+  // PASO 2: Respuesta a la selección de categoría
   if (state === 'AWAITING_CATEGORY' && action === 'select_category') {
       const category = payload;
+      const categoryTitle = reply.title;
       conversationState.set(userPhone, {
-          state: 'AWAITING_PRODUCT_NAME',
-          data: { category: category, userId: userPhone } // Guarda la categoría
+          state: 'AWAITING_BRAND', // PASO 3
+          data: { category: category, userId: userPhone }
       });
-      await sendTextMessage(userPhone, `¡Genial! Categoría seleccionada: ${category.toUpperCase()}. Ahora dime, ¿qué producto específico dentro de esta categoría estás buscando? (ej: "iPhone 15 Pro", "Samsung Frame 55 pulgadas")`);
+      await sendTextMessage(userPhone, `¡Perfecto, *${categoryTitle}*! ¿Tienes alguna marca en mente? (ej: "Samsung", "LG", o escribe "ninguna")`);
       return;
   }
-  // Respuesta a la confirmación de análisis IA
+  // PASO 6: Respuesta a la confirmación de análisis IA
   else if (state === 'AWAITING_AI_CONFIRMATION' && action === 'ai_confirm') {
       if (payload === 'yes') {
-          // Si dice SÍ, ejecutamos el análisis avanzado
+          // Si dice SÍ, ejecutamos el análisis avanzado (PASO 7)
           executeAdvancedAIAnalysis(userPhone, currentStateData);
       } else {
-          // Si dice NO, terminamos o preguntamos si quiere buscar otra cosa
-          await sendTextMessage(userPhone, "Entendido. Si necesitas algo más, no dudes en preguntar. 😊");
+          // Si dice NO, terminamos
+          await sendTextMessage(userPhone, "Entendido. ¡Espero que el análisis rápido te sea útil! Si necesitas algo más, no dudes en preguntar. 😊");
           conversationState.delete(userPhone);
       }
       return;
   }
-  // Respuesta a pregunta de aclaración de uso (ej: notebook)
-  else if (action === 'clarify_usage') {
-    searchContext.usage = payload; // Guarda el uso (ej: 'gaming')
-    conversationState.set(userPhone, { state: 'AWAITING_BRAND', data: searchContext });
-    await sendTextMessage(userPhone, '¡Perfecto! ¿Tienes alguna marca preferida o alguna que quieras evitar? (O escribe "ninguna")');
-  }
-  // Respuesta a filtros adicionales
-  else if (action === 'add_filter') {
-    if (payload === 'rating') {
-      searchContext.ratingFilter = true; // Marca para añadir tbs=rt:4.5
-    }
-    if (payload === 'features') {
-        conversationState.set(userPhone, { state: 'AWAITING_FEATURE_KEYWORD', data: searchContext });
-        await sendTextMessage(userPhone, 'Ok, dime qué característica es importante para ti (ej: "resistente al agua", "pantalla OLED", "16GB RAM").');
-    } else {
-        // Si no es 'features' o elige 'buscar ahora', iniciamos la búsqueda
-        conversationState.set(userPhone, { state: 'SEARCHING', data: searchContext });
-        executeWhatsAppSearch(userPhone, searchContext, conversationState);
-    }
-  }
-  // Selección de producto de la lista
+  // Selección de producto de la lista (después del análisis IA)
   else if (action === 'select_product') {
     const product = results?.find(p => p.product_id == payload);
     if (!product) return;
@@ -100,9 +78,8 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
         { type: 'reply', reply: { id: `show_details:${payload}`, title: 'Pros y Contras' } },
         { type: 'reply', reply: { id: `show_stores:${payload}`, title: 'Opciones de Compra' } },
         { type: 'reply', reply: { id: `show_features:${payload}`, title: 'Características' } },
-        { type: 'reply', reply: { id: `show_images:${payload}`, title: 'Ver Imágenes' } },
       ];
-      await sendReplyButtonsMessage(userPhone, `¡Listo! Seleccionaste: *${product.title}*.\n\n¿Qué te gustaría ver?`, buttons.slice(0,3)); // Max 3 buttons
+      await sendReplyButtonsMessage(userPhone, `¡Listo! Seleccionaste: *${product.title}*.\n\n¿Qué te gustaría ver?`, buttons.slice(0,3));
     } catch (error) {
        console.error("Error al obtener detalles inmersivos:", error);
        await sendTextMessage(userPhone, "Lo siento, no pude obtener los detalles completos para este producto.");
@@ -139,29 +116,41 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
           } else { featuresText = "Lo siento, no encontré características detalladas."; }
           await sendTextMessage(userPhone, featuresText);
       }
-      else if (action === 'show_images') {
-          await sendTextMessage(userPhone, `Aquí tienes las imágenes para *${product.title}*:`);
-          const images = product.immersive_details?.thumbnails || [product.thumbnail];
-          if (images && images.length > 0) {
-            for (const img of images.slice(0, 4)) { if (img) await sendImageMessage(userPhone, img); }
-          } else { await sendTextMessage(userPhone, "Lo siento, no encontré imágenes adicionales."); }
-      }
-      await setClosingState(); // Llama a la nueva pregunta post-detalles
+      await setClosingState();
   }
   // Acciones después de ver detalles
   else if (action === 'post_action') {
-      if (payload === 'next_option') {
-          // Lógica simplificada
-          await sendTextMessage(userPhone, "Lo siento, la opción 'Ver otra opción' aún no está implementada. ¿Quieres buscar algo más?");
-          conversationState.set(userPhone, { state: 'AWAITING_QUERY' });
-      } else if (payload === 'new_search') {
-          conversationState.set(userPhone, { state: 'AWAITING_QUERY' });
-          await sendTextMessage(userPhone, "¿Qué otro producto te gustaría buscar?");
+      if (payload === 'new_search') {
+          // Reinicia el flujo al Paso 1 (Saludo)
+          conversationState.set(userPhone, { state: 'GREETING', data: {} });
+          handleGreeting(userPhone, userPhone);
       } else if (payload === 'end') {
           await sendTextMessage(userPhone, "¡De nada! Estoy aquí si necesitas algo más. 😊");
           conversationState.delete(userPhone);
       }
   }
+}
+
+/**
+ * Función separada para manejar el saludo e inicio de conversación (PASO 1 y 2)
+ */
+async function handleGreeting(userPhone, userId) {
+    conversationState.set(userPhone, { state: 'AWAITING_CATEGORY', data: { userId: userId } });
+    const categories = [
+        { id: "celular", title: "📱 Celulares"},
+        { id: "notebook", title: "💻 Notebooks"},
+        { id: "televisor", title: "📺 Televisores"},
+        { id: "heladera", title: "🧊 Heladeras"},
+        { id: "lavarropas", title: "🧺 Lavarropas"},
+        { id: "aire_acondicionado", title: "💨 Aires Ac."},
+        { id: "auriculares", title: "🎧 Auriculares"},
+        { id: "cocina", title: "🍳 Cocinas"},
+        { id: "microondas", title: "🔥 Microondas"},
+        { id: "smartwatch", title: "⌚ Smartwatches"}
+    ];
+    const rows = categories.map(cat => ({ id: `select_category:${cat.id}`, title: cat.title }));
+    await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras.");
+    await sendListMessage(userPhone, "Elige una Categoría", "¿En qué tipo de producto estás interesado hoy?", "Categorías", [{ title: "Categorías Populares", rows }]);
 }
 
 /**
@@ -173,8 +162,8 @@ export async function handleWhatsAppWebhook(req, res) {
   res.sendStatus(200);
 
   const userPhone = message.from;
-  const currentStateData = conversationState.get(userPhone) || { state: 'GREETING', data: {} };
-  const currentSearchData = currentStateData.data || {};
+  const currentStateData = conversationState.get(userPhone) || { state: 'GREETING', data: { userId: userPhone } };
+  const currentSearchData = currentStateData.data || { userId: userPhone };
 
   if (message.type === 'interactive') {
     handleInteractiveReply(userPhone, message, currentStateData);
@@ -182,86 +171,60 @@ export async function handleWhatsAppWebhook(req, res) {
   }
 
   if (message.type === 'text') {
-    const userText = message.text.body.toLowerCase();
+    const userText = message.text.body;
 
     // Manejo del cierre explícito
     if (currentStateData.state === 'AWAITING_CLOSING' || currentStateData.state === 'AWAITING_POST_DETAIL_ACTION') {
        const negativeKeywords = ['no', 'gracias', 'nada mas', 'eso es todo', 'chau'];
-        if (negativeKeywords.some(keyword => userText.includes(keyword))) {
+        if (negativeKeywords.some(keyword => userText.toLowerCase().includes(keyword))) {
             await sendTextMessage(userPhone, "¡De nada! Estoy aquí si necesitas algo más. 😊");
             conversationState.delete(userPhone);
             return;
         }
-        // Si no es negativo, asumimos nueva búsqueda desde GREETING
-        conversationState.set(userPhone, { state: 'AWAITING_CATEGORY', data: { userId: userPhone } });
-        // Ofrecer categorías nuevamente
-        const categoryButtons = [
-            { type: 'reply', reply: { id: `select_category:celular`, title: '📱 Celulares' } },
-            { type: 'reply', reply: { id: `select_category:notebook`, title: '💻 Notebooks' } },
-            { type: 'reply', reply: { id: `select_category:heladera`, title: '🧊 Heladeras' } },
-        ];
-        await sendReplyButtonsMessage(userPhone, "Hola de nuevo. ¿En qué categoría de producto estás interesado hoy?", categoryButtons.slice(0,3));
-        return; // Salir después de reiniciar
+        // Si no es negativo, asumimos nueva búsqueda
+        handleGreeting(userPhone, userPhone);
+        return;
     }
 
-    // Flujo conversacional principal guiado por categoría
+    // Flujo conversacional principal guiado
     switch (currentStateData.state) {
         case 'AWAITING_CATEGORY':
-            // Si el usuario escribe la categoría en lugar de usar botón
-            const categoryText = userText; // Asumimos que el texto es la categoría
              conversationState.set(userPhone, {
                 state: 'AWAITING_PRODUCT_NAME',
-                data: { category: categoryText, userId: userPhone }
+                data: { ...currentSearchData, category: userText.toLowerCase() }
             });
-            await sendTextMessage(userPhone, `¡Genial! Categoría: ${categoryText.toUpperCase()}. Ahora dime, ¿qué producto específico buscas?`);
+            await sendTextMessage(userPhone, `¡Genial! Categoría: ${userText.toUpperCase()}. Ahora dime, ¿qué producto específico buscas?`);
             break;
 
         case 'AWAITING_PRODUCT_NAME':
-            currentSearchData.query = message.text.body; // Guarda el nombre del producto
+            currentSearchData.query = userText;
+            conversationState.set(userPhone, { state: 'AWAITING_BRAND', data: currentSearchData });
+            await sendTextMessage(userPhone, '¡Perfecto! ¿Tienes alguna marca en mente? (ej: "Samsung", o escribe "ninguna")');
+            break;
+
+        case 'AWAITING_BRAND':
+            currentSearchData.brandPreference = userText;
             conversationState.set(userPhone, { state: 'AWAITING_PRICE_RANGE', data: currentSearchData });
-            await sendTextMessage(userPhone, `¡Entendido! Buscaremos "${currentSearchData.query}". ¿Tienes algún rango de precios en mente? (ej: "hasta 150000", o "no")`);
+            await sendTextMessage(userPhone, `¡Anotado! ¿Tienes algún rango de precios? (ej: "hasta 150000", o "no")`);
             break;
 
         case 'AWAITING_PRICE_RANGE':
-            const priceData = parsePriceFromText(userText);
+            // PASO 4: Pregunta de Precio
+            const priceData = parsePriceFromText(userText.toLowerCase());
             const searchDataWithPrice = { ...currentSearchData, ...priceData };
-            conversationState.set(userPhone, { state: 'AWAITING_EXTRA_FILTERS', data: searchDataWithPrice });
-            const filterButtons = [
-                { type: 'reply', reply: { id: `add_filter:rating`, title: 'Mejor Valoración ⭐' } },
-                { type: 'reply', reply: { id: `add_filter:features`, title: 'Caract. Clave ✨' } },
-                { type: 'reply', reply: { id: `add_filter:search_now`, title: 'Buscar Ahora 🚀' } },
-            ];
-            await sendReplyButtonsMessage(userPhone, "Perfecto. Antes de buscar, ¿quieres que filtre por algo más?", filterButtons.slice(0,3));
+            conversationState.set(userPhone, { state: 'SEARCHING', data: searchDataWithPrice });
+            // PASO 5: Ejecutar análisis local
+            executeLocalAnalysisSearch(userPhone, searchDataWithPrice, conversationState);
             break;
         
-        case 'AWAITING_EXTRA_FILTERS':
-            // Asumimos que si responde texto es para buscar ya
-            if (userText.includes('valoración') || userText.includes('rating')) currentSearchData.ratingFilter = true;
-            conversationState.set(userPhone, { state: 'SEARCHING', data: currentSearchData });
-            executeWhatsAppSearch(userPhone, currentSearchData, conversationState);
-            break;
-            
-        case 'AWAITING_FEATURE_KEYWORD':
-            currentSearchData.featureKeyword = userText;
-            conversationState.set(userPhone, { state: 'SEARCHING', data: currentSearchData });
-            executeWhatsAppSearch(userPhone, currentSearchData, conversationState);
-            break;
-
         default: // GREETING
-            if (['hola', 'hey', 'buenas'].includes(userText)) {
-                conversationState.set(userPhone, { state: 'AWAITING_CATEGORY', data: { userId: userPhone } });
-                const categoryButtons = [
-                    { type: 'reply', reply: { id: `select_category:celular`, title: '📱 Celulares' } },
-                    { type: 'reply', reply: { id: `select_category:notebook`, title: '💻 Notebooks' } },
-                    { type: 'reply', reply: { id: `select_category:heladera`, title: '🧊 Heladeras' } },
-                ];
-                await sendTextMessage(userPhone, "¡Hola! 👋 Soy tu asistente de compras. ¿En qué categoría de producto estás interesado hoy?");
-                await sendReplyButtonsMessage(userPhone, "Elige una opción o escribe la categoría:", categoryButtons.slice(0,3));
+            if (['hola', 'hey', 'buenas'].includes(userText.toLowerCase())) {
+                handleGreeting(userPhone, userPhone); // PASO 1 y 2
             } else {
-                // Si el primer mensaje no es saludo, intenta búsqueda directa
-                const directSearchData = { query: message.text.body, userId: userPhone };
+                // Búsqueda directa (como fallback)
+                const directSearchData = { query: userText, userId: userPhone, category: 'default' };
                 conversationState.set(userPhone, { state: 'SEARCHING', data: directSearchData });
-                executeWhatsAppSearch(userPhone, directSearchData, conversationState);
+                executeLocalAnalysisSearch(userPhone, directSearchData, conversationState);
             }
             break;
     }
