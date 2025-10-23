@@ -6,7 +6,7 @@ import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage, sendListMes
 // --- GESTIÓN DE ESTADO DE CONVERSACIÓN ---
 const conversationState = new Map();
 
-// --- FUNCIONES AUXILIARES (parsePriceFromText) ---
+// --- FUNCIONES AUXILIARES (parsePriceFromText) ---  
 
 /**
  * Parsea un texto para extraer un rango de precios.

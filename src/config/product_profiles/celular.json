@@ -7,7 +7,7 @@
     "recency": 1.4,
     "discount": 0.9,
     "completeness": 1.0,
-    "keyword": 1.4 
+    "keyword": 1.5
   },
   "brands": {
     "apple": 25,
@@ -18,28 +18,27 @@
     "oneplus": 14,
     "oppo": 10
   },
-  "positiveKeywords": [
-    "pro", "max", "ultra", "plus", 
-    "nuevo", "generacion", "gen", 
-    "128gb", "256gb", "512gb", "1tb",
-    "8gb", "12gb", "16gb",
-    "oled", "amoled", "120hz",
-    "5g",
-    "carga rapida",
-    "inalambrica",
-    "triple camara", "cuadruple camara", "zoom optico",
-    "2024", "2025",
-    "snapdragon 8 gen", "a16 bionic", "a17 bionic", "tensor g", 
-    "ecosistema apple", "ecosistema samsung", "ecosistema google",
-    "ia integrada", "galaxy ai", "google ai" 
-  ],
-  "negativeKeywords": [
-    "refurbished", "usado", "reacondicionado", "exhibicion",
-    "4gb", "32gb", "64gb", 
-    "lcd", "720p",
-    "sin nfc",
-    "iphone 8", "iphone x", "galaxy s9", "galaxy s10",
-    "snapdragon 6", "snapdragon 4", "mediatek helio", "exynos 9", "a13 bionic" 
-  ]
+  "positiveKeywords": {
+    "1tb": 20, "512gb": 15, "256gb": 5,
+    "16gb": 20, "12gb": 15, "8gb": 5,
+    "a17 bionic": 25, "a16 bionic": 15, "a15 bionic": 5,
+    "snapdragon 8 elite gen 5": 25, "snapdragon 8 elite": 20, "snapdragon 8 gen 4": 18,
+    "snapdragon 8 gen 3": 15, "snapdragon 8 gen 2": 10, "snapdragon 8 gen 1": 5,
+    "tensor g5": 18, "tensor g4": 10,"tensor g3": 8, "tensor g2": 6,
+    "pro": 10, "max": 12, "ultra": 15, "plus": 8,
+    "oled": 5, "amoled": 8, "ltpo": 5, "120hz": 10,
+    "galaxy ai": 10, "google ai": 10, "ia integrada": 8,
+    "ecosistema apple": 5, "ecosistema samsung": 5, "ecosistema google": 5,
+    "2025": 10, "2024": 8
+  },
+  "negativeKeywords": {
+    "usado": -50, "reacondicionado": -40, "refurbished": -40, "exhibicion": -30,
+    "4gb": -30, "6gb": -15, "64gb": -25, "128gb": -5,
+    "lcd": -15, "720p": -20, "60hz": -10,
+    "a14 bionic": -5, "a13 bionic": -10,
+    "snapdragon 7": -10, "snapdragon 6": -20, "snapdragon 4": -30,
+    "mediatek helio": -20, "exynos": -10,
+    "2022": -5, "2021": -10
+  }
 }
 

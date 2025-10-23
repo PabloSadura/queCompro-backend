@@ -32,7 +32,6 @@ try {
 
 /**
  * Detecta la categoría principal del producto basándose en palabras clave en la consulta.
- * (Esta función se mantiene igual)
  */
 function detectCategory(userQuery) {
     const queryLower = userQuery.toLowerCase();
@@ -46,10 +45,14 @@ function detectCategory(userQuery) {
 }
 
 /**
- * Analiza una lista de resultados de Google Shopping aplicando ponderaciones por categoría
- * cargadas desde archivos JSON externos, con puntajes específicos por keyword.
+ * Analiza una lista de resultados de Google Shopping aplicando ponderaciones por categoría.
+ * RECIBE LOS DATOS ESTRUCTURADOS DE LA IA DE LIMPIEZA.
+ * @param {string} userQuery
+ * @param {Array<object>} shoppingResults - Datos originales (para precio, rating, etc.)
+ * @param {Array<object>} structuredProducts - Datos limpios de la IA (para specs, marca, etc.)
+ * @param {string} category - Categoría detectada
  */
-export function analyzeShoppingResults(userQuery, shoppingResults) {
+export function analyzeShoppingResults(userQuery, shoppingResults, structuredProducts, category = 'default') {
   if (!shoppingResults || shoppingResults.length === 0) {
         return {
           productos_analisis: [],
@@ -58,28 +61,37 @@ export function analyzeShoppingResults(userQuery, shoppingResults) {
    }
 
   // --- 1. Detección de Categoría y Selección de Perfil ---
-  const category = detectCategory(userQuery);
-  const profile = categoryProfiles[category] || categoryProfiles.default;
-  console.log(`[Analysis] Categoría detectada: ${category}. Usando perfil '${profile === categoryProfiles.default ? 'default' : category}'.`);
+  // Si la categoría no fue pre-seleccionada por el bot, la detecta.
+  const finalCategory = (category && category !== 'default') ? category : detectCategory(userQuery);
+  const profile = categoryProfiles[finalCategory] || categoryProfiles.default;
+  console.log(`[Analysis] Categoría detectada: ${finalCategory}. Usando perfil '${profile === categoryProfiles.default ? 'default' : finalCategory}'.`);
 
-  // --- 2. Pre-cálculos (sin cambios) ---
+  // --- 2. Pre-cálculos ---
   const queryWords = userQuery.toLowerCase().split(' ').filter(word => word.length > 2);
   let totalPrices = 0;
   let validPriceCount = 0;
   const currentYear = new Date().getFullYear();
 
+  // Creamos un mapa de los datos estructurados para fácil acceso
+  const structuredMap = new Map(structuredProducts.map(p => [p.product_id, p]));
+
   const productsWithParsedData = shoppingResults.map(product => {
       const price = parsePrice(product.price);
       if (price > 0) { totalPrices += price; validPriceCount++; }
       const extractedPriceNum = product.extracted_price ? parsePrice(product.extracted_price) : 0;
+      
+      // Obtenemos los datos limpios correspondientes
+      const cleanData = structuredMap.get(product.product_id) || { brand: product.brand, specs: [], titleLower: product.title.toLowerCase() };
+      
       return {
             ...product,
             numericPrice: price,
             extractedNumericPrice: extractedPriceNum > price ? extractedPriceNum : 0,
             rating: parseFloat(product.rating) || 0,
             reviews: parseInt(String(product.reviews).replace(/\D/g,'')) || 0,
-            titleLower: product.title ? product.title.toLowerCase() : '',
-            brandLower: product.brand ? product.brand.toLowerCase() : ''
+            titleLower: cleanData.clean_title.toLowerCase(), // Usamos el título limpio
+            brandLower: cleanData.brand.toLowerCase(),     // Usamos la marca limpia
+            specs: cleanData.specs || []                   // Usamos las specs limpias
       };
   });
 
@@ -98,10 +110,8 @@ export function analyzeShoppingResults(userQuery, shoppingResults) {
     // a) Relevancia del Título
     let relevanceScore = 0;
     queryWords.forEach(word => { if (product.titleLower.includes(word)) relevanceScore += 10; });
-    if (product.titleLower.length < (userQuery.length + 10) && relevanceScore > 0) relevanceScore += 5;
     score += relevanceScore * (weights.relevance || 1);
-    if (relevanceScore >= 20) pros.push("Título relevante");
-    else if (relevanceScore < 10 && queryWords.length > 0) cons.push("Título poco relevante");
+    if (relevanceScore >= 10) pros.push("Título relevante");
 
     // b) Calidad Percibida
     let qualityScore = 0;
@@ -111,7 +121,6 @@ export function analyzeShoppingResults(userQuery, shoppingResults) {
     if (product.rating >= 4.3) pros.push(`Valoración (${product.rating}⭐)`);
     if (product.reviews > 200) pros.push(`Reseñas (${product.reviews})`);
     if (product.rating > 0 && product.rating < 4.0) cons.push(`Valoración mejorable (${product.rating}⭐)`);
-    if (product.rating > 0 && product.reviews < 50) cons.push("Pocas reseñas");
     if (product.rating === 0) cons.push("Sin valoración");
 
     // c) Precio Relativo
@@ -153,35 +162,29 @@ export function analyzeShoppingResults(userQuery, shoppingResults) {
     score -= completenessPenalty * (weights.completeness || 1);
     if (completenessPenalty >= 10) cons.push("Faltan datos clave");
 
-    // --- ✅ h) Análisis de Keywords con Puntuación Específica ---
+    // h) Análisis de Keywords (usa 'specs' limpias y el título)
     let keywordScore = 0;
-    let foundNegativeKeywords = []; // Para los 'cons'
+    let foundNegativeKeywords = [];
+    const productSpecs = product.specs.map(s => s.toLowerCase());
+    const textToScan = product.titleLower + " " + productSpecs.join(" ");
 
-    // Iteramos sobre las keywords positivas del perfil
     for (const keyword in positiveKeywords) {
-        // Usamos una expresión regular para buscar la palabra completa o variaciones comunes
-        // ej: busca "i7", "i7-", "i7 " para evitar coincidencias parciales como en "Ryzen 7i"
-        const regex = new RegExp(`\\b${keyword}\\b|${keyword}-|${keyword}\\s`, 'i'); 
-        if (regex.test(product.titleLower)) {
-            keywordScore += positiveKeywords[keyword]; // Sumamos el puntaje específico
-            console.log(`[Keyword Score] +${positiveKeywords[keyword]} for "${keyword}" in "${product.title}"`);
+        const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+        if (regex.test(textToScan)) {
+            keywordScore += positiveKeywords[keyword];
         }
     }
-    // Iteramos sobre las keywords negativas del perfil
     for (const keyword in negativeKeywords) {
-        const regex = new RegExp(`\\b${keyword}\\b|${keyword}-|${keyword}\\s`, 'i');
-        if (regex.test(product.titleLower)) {
-            keywordScore += negativeKeywords[keyword]; // Sumamos el puntaje negativo (resta)
-            foundNegativeKeywords.push(keyword); // Guardamos la keyword negativa encontrada
-            console.log(`[Keyword Score] ${negativeKeywords[keyword]} for "${keyword}" in "${product.title}"`);
+        const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+        if (regex.test(textToScan)) {
+            keywordScore += negativeKeywords[keyword];
+            foundNegativeKeywords.push(keyword);
         }
     }
     score += keywordScore * (weights.keyword || 1);
-    // Añadimos un 'con' genérico si se encontraron keywords negativas importantes
-    if (foundNegativeKeywords.length > 0 && keywordScore <= -10) { // Umbral ajustable
+    if (foundNegativeKeywords.length > 0) {
         cons.push(`Specs bajas/condición (${foundNegativeKeywords.join(', ')})`);
     }
-    // --- Fin de la corrección ---
 
     // Limpieza final de Pros/Contras
     const finalPros = [...new Set(pros)].slice(0, 3);
@@ -190,11 +193,11 @@ export function analyzeShoppingResults(userQuery, shoppingResults) {
     return { ...product, score, pros: finalPros, cons: finalCons };
   });
 
-  // Ordenar y seleccionar los 6 mejores (sin cambios)
+  // Ordenar y seleccionar los 6 mejores
   scoredProducts.sort((a, b) => b.score - a.score);
   const topProducts = scoredProducts.slice(0, 6);
 
-  // --- 4. Construcción de la Respuesta Final (sin cambios) ---
+  // --- 4. Construcción de la Respuesta Final ---
   const productos_analisis = topProducts.map((product, index) => ({
       product_id: product.product_id,
       pros: product.pros,
@@ -214,7 +217,7 @@ export function analyzeShoppingResults(userQuery, shoppingResults) {
   return { productos_analisis, recomendacion_final };
 }
 
-// Función auxiliar parsePrice (sin cambios)
+// Función auxiliar parsePrice
 function parsePrice(priceString) {
     if (!priceString) return 0;
     const cleanedString = String(priceString)
