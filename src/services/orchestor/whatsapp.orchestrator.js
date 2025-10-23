@@ -4,22 +4,28 @@ import { saveSearchToFirebase } from '../search-service/firebaseService.service.
 import logicFusion from '../../controllers/logis.controller.js';
 import { sendTextMessage, sendListMessage } from '../search-service/whatsapp.service.js';
 
-/**
- * Orquesta el flujo completo de una búsqueda simple para WhatsApp.
- * Llama a Google Shopping y luego a Gemini.
- * @param {string} userPhone - El número de teléfono del usuario.
- * @param {object} searchData - Contiene query y userId.
- * @param {Map} conversationState - El mapa de estado de la conversación.
- */
+
 export async function executeWhatsAppSearch(userPhone, searchData, conversationState) {
   let thinkingTimeout = null;
   try {
-    const { query, userId, minPrice, maxPrice, ratingFilter } = searchData; // Recibe precios y filtros
+    const {
+        query,
+        userId,
+        minPrice,
+        maxPrice,
+        brandPreference,
+        ratingFilter // (ratingFilter no se usa en este flujo simple, pero se puede añadir a la query)
+    } = searchData;
+
+    // --- Construcción de la Consulta ---
+    let finalQuery = query;
+    if (brandPreference && brandPreference.toLowerCase() !== 'ninguna') {
+        finalQuery += ` ${brandPreference}`;
+    }
     
-    let searchingText = `¡Entendido! Buscando "${query}"`;
+    let searchingText = `¡Entendido! Buscando "${finalQuery}"`;
     if (maxPrice) searchingText += ` hasta $${maxPrice}`;
     if (minPrice) searchingText += ` desde $${minPrice}`;
-    if (ratingFilter) searchingText += ` con buena valoración`;
     searchingText += `... 🕵️‍♂️`;
     
     await sendTextMessage(userPhone, searchingText);
@@ -28,9 +34,10 @@ export async function executeWhatsAppSearch(userPhone, searchData, conversationS
       sendTextMessage(userPhone, "El análisis está tardando un poco más de lo normal, pero sigo trabajando en ello... 🤓");
     }, 20000); // 20 segundos
 
-    // 1. Buscar en Google Shopping (con parámetros fijos)
+    // --- INICIO DE LA LÓGICA DE BÚSQUEDA ---
+    // 1. Buscar en Google Shopping
     const { products: shoppingResults, totalResults } = await fetchGoogleShoppingResults(
-        userId, query, 'ar', 'es', 'ARS', minPrice, maxPrice, ratingFilter
+        userId, finalQuery, 'ar', 'es', 'ARS', minPrice, maxPrice, ratingFilter
     );
 
     if (!shoppingResults || shoppingResults.length === 0) {
@@ -41,8 +48,8 @@ export async function executeWhatsAppSearch(userPhone, searchData, conversationS
 
     await sendTextMessage(userPhone, "Encontré varios productos. Analizando con IA (Gemini)... 🧠");
 
-    // 2. Analizar con Gemini
-    const aiAnalysis = await getBestRecommendationFromGemini(query, shoppingResults);
+    // 2. Analizar con Gemini (o el fallback a OpenAI que tiene 'aiService')
+    const aiAnalysis = await getBestRecommendationFromGemini(finalQuery, shoppingResults);
     
     clearTimeout(thinkingTimeout); // Detenemos el mensaje de "sigo pensando"
 
@@ -65,14 +72,13 @@ export async function executeWhatsAppSearch(userPhone, searchData, conversationS
     };
     
     // 4. Guardar en Firebase
-    const { id: collectionId } = await saveSearchToFirebase(query, userId, finalRecommendation);
+    const { id: collectionId } = await saveSearchToFirebase(finalQuery, userId, finalRecommendation);
 
     // 5. Guardar estado para el siguiente paso (selección de producto)
     conversationState.set(userPhone, {
       state: 'AWAITING_PRODUCT_SELECTION',
       results: productosRecomendados,
-      collectionId: collectionId,
-      data: searchData
+      collectionId: collectionId
     });
 
     // 6. Enviar lista interactiva al usuario
