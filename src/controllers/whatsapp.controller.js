@@ -239,7 +239,7 @@ export async function handleWhatsAppWebhook(req, res) {
             const searchDataWithPrice = { ...currentSearchData, ...priceData };
             conversationState.set(userPhone, { state: 'SEARCHING', data: searchDataWithPrice });
             // PASO 5: Ejecutar búsqueda y análisis
-            executeLocalAnalysisSearch(userPhone, searchDataWithPrice, conversationState);
+            executeWhatsAppSearch(userPhone, searchDataWithPrice, conversationState);
             break;
         
         default: // GREETING (PASO 1)
@@ -255,7 +255,7 @@ export async function handleWhatsAppWebhook(req, res) {
                     category: 'default' 
                 };
                 conversationState.set(userPhone, { state: 'SEARCHING', data: directSearchData });
-                executeLocalAnalysisSearch(userPhone, directSearchData, conversationState);
+                executeWhatsAppSearch(userPhone, directSearchData, conversationState);
             }
             break;
     }
