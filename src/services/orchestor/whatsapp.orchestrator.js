@@ -92,7 +92,7 @@ export async function executeLocalAnalysisSearch(userPhone, searchData, conversa
     });
     
     const confirmationButtons = [
-      { type: 'reply', reply: { id: `ai_confirm:yes`, title: 'Sí, analizar con IA ✨' } },
+      { type: 'reply', reply: { id: `ai_confirm:yes`, title: 'Sí, utilizá la IA ✨' } },
       { type: 'reply', reply: { id: `ai_confirm:no`, title: 'No, gracias 👋' } },
     ];
     await sendTextMessage(userPhone, preliminaryResultText);
