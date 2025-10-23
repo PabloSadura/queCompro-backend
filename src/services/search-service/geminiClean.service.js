@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Usamos Flash para que sea rápido y económico
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 /**
@@ -47,7 +48,7 @@ export async function structureProductDataWithAI(shoppingResults) {
     Quiero que extraigas:
     1.  "product_id": El ID original, sin cambios.
     2.  "clean_title": El título limpio (ej: "Samsung Galaxy S24 Ultra 512GB").
-    3.  "brand": La marca (ej: "Samsung").
+    3.  "brand": La marca (ej: "Samsung"). Si no puedes identificarla, usa "Genérico".
     4.  "model": El modelo principal (ej: "Galaxy S24 Ultra").
     5.  "specs": Un array de strings con las especificaciones clave (ej: ["512gb", "12gb ram", "snapdragon 8 gen 3"]).
     
@@ -83,3 +84,4 @@ export async function structureProductDataWithAI(shoppingResults) {
     }));
   }
 }
+

@@ -1,5 +1,5 @@
 // Importaciones
-import { executeLocalAnalysisSearch, executeAdvancedAIAnalysis } from '../services/orchestor/whatsapp.orchestrator.js'; // Ajusta la ruta si es necesario
+import { executeWhatsAppSearch as executeLocalAnalysisSearch, executeAdvancedAIAnalysis } from '../services/orchestor/whatsapp.orchestrator.js'; // Ajusta la ruta si es necesario
 import { getEnrichedProductDetails } from '../services/search-service/productDetail.service.js'; // Ajusta la ruta si es necesario
 import { sendTextMessage, sendImageMessage, sendReplyButtonsMessage, sendListMessage } from '../services/search-service/whatsapp.service.js'; // Ajusta la ruta si es necesario
 
