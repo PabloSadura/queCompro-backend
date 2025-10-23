@@ -1,11 +1,10 @@
-// Importamos el motor de reglas local
-import { analyzeShoppingResults } from '../services/search-service/analysisService.js';
+import { analyzeShoppingResults } from '../search-service/ia.service.js';
 // ✅ Importamos el nuevo servicio de limpieza
-import { structureProductDataWithAI } from '../services/search-service/geminiCleaner.service.js';
+import { structureProductDataWithAI } from '../search-service/geminiClean.service.js';
 // Resto de importaciones
-import { fetchGoogleShoppingResults } from '../services/search-service/googleSopphing.js';
-import { saveSearchToFirebase } from '../services/search-service/firebaseService.js';
-import logicFusion from './logis.controller.js';
+import { fetchGoogleShoppingResults } from '../search-service/googleSopphing.service.js';
+import { saveSearchToFirebase } from '../search-service/firebaseService.service.js';
+import logicFusion from '../../controllers/logis.controller.js';
 
 /**
  * Orquesta el flujo de búsqueda principal.
