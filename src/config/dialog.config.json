@@ -8,30 +8,48 @@
     { "id": "auriculares", "title": "🎧 Auriculares", "query": "auriculares" },
     { "id": "smartwatch", "title": "⌚ Smartwatches", "query": "smartwatch" },
     { "id": "cocina", "title": "🍳 Cocinas", "query": "cocina" },
-    { "id": "microondas", "title": "🔥 Microondas", "query": "microondas" },
+    { "id": "microondas", "title": "🔥 Microondas" },
     { "id": "otros", "title": "🔍 Otros (Escribir)", "query": "" }
   ],
   "brandSuggestions": {
     "celular": [
       { "id": "samsung", "title": "Samsung" },
       { "id": "apple", "title": "Apple" },
-      { "id": "motorola", "title": "Motorola" }
+      { "id": "motorola", "title": "Motorola" },
+      { "id": "xiaomi", "title": "Xiaomi" },
+      { "id": "google", "title": "Google" },
+      { "id": "vivo", "title": "Vivo" },
+      { "id": "realme", "title": "Realme" },
+      { "id": "oppo", "title": "Oppo" },
+      { "id": "sony", "title": "Sony" },
+      { "id": "huawei", "title": "Huawei" },
+      { "id": "otras", "title": "🔍 Otras (Escribir)" }
     ],
     "notebook": [
       { "id": "hp", "title": "HP" },
       { "id": "lenovo", "title": "Lenovo" },
-      { "id": "dell", "title": "Dell" }
+      { "id": "dell", "title": "Dell" },
+      { "id": "apple", "title": "Apple" },
+      { "id": "asus", "title": "Asus" },
+      { "id": "acer", "title": "Acer" },
+      { "id": "msi", "title": "MSI" },
+      { "id": "samsung", "title": "Samsung" },
+      { "id": "microsoft", "title": "Microsoft" },
+      { "id": "otras", "title": "🔍 Otras (Escribir)" }
     ],
     "televisor": [
       { "id": "samsung", "title": "Samsung" },
       { "id": "lg", "title": "LG" },
-      { "id": "philips", "title": "Philips" }
+      { "id": "sony", "title": "Sony" },
+      { "id": "philips", "title": "Philips" },
+      { "id": "tcl", "title": "TCL" },
+      { "id": "hisense", "title": "Hisense" },
+      { "id": "noblex", "title": "Noblex" },
+      { "id": "otras", "title": "🔍 Otras (Escribir)" }
     ],
-    "heladera": [
-      { "id": "samsung", "title": "Samsung" },
-      { "id": "whirlpool", "title": "Whirlpool" },
-      { "id": "patrick", "title": "Patrick" }
-    ],
-    "default": []
+    "default": [
+      { "id": "otras", "title": "🔍 Escribir marca" }
+    ]
   }
 }
+
