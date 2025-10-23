@@ -211,10 +211,15 @@ export async function handleWhatsAppWebhook(req, res) {
             break;
             
         // Usuario escribe el nombre del producto después de elegir categoría
-        case 'AWAITING_PRODUCT_NAME':
-            currentSearchData.query = userText; // Sobrescribe la query base con el producto específico
+      case 'AWAITING_PRODUCT_NAME':
+            // Concatenamos la categoría (query base) con el producto específico
+            const baseQuery = currentSearchData.query || '';
+            const specificProduct = userText;
+            currentSearchData.query = `${baseQuery} ${specificProduct}`; // Ej: "Celulares iPhone 15 Pro"
+            
             conversationState.set(userPhone, { state: 'AWAITING_BRAND', data: currentSearchData });
-            await sendTextMessage(userPhone, '¡Perfecto! ¿Tienes alguna marca en mente? (ej: "Samsung", o escribe "ninguna")');
+            // Confirmamos la búsqueda completa
+            await sendTextMessage(userPhone, `¡Perfecto! Buscaremos "${currentSearchData.query}". ¿Tienes alguna marca en mente? (ej: "Samsung", o escribe "ninguna")`);
             break;
 
         // PASO 3: Usuario escribe la marca
