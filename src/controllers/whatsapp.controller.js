@@ -76,7 +76,14 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
   const replyId = reply.id;
   const [action, payload] = replyId.split(':');
   
-  const setClosingState = async () => { /* ... (sin cambios) ... */ };
+  const setClosingState = async () => {
+    const buttons = [
+        { type: 'reply', reply: { id: `post_action:new_search`, title: 'Buscar algo más 🔎' } },
+        { type: 'reply', reply: { id: `post_action:end`, title: 'No, gracias 👋' } },
+    ];
+    await sendReplyButtonsMessage(userPhone, "¿Qué te pareció este producto? ¿Te gustaría ver otra opción de la lista o buscar algo diferente?", buttons.slice(0, 3));
+    conversationState.set(userPhone, { ...currentStateData, state: 'AWAITING_POST_DETAIL_ACTION' });
+  };
   
   // --- Manejo de Acciones Interactivas ---
 
@@ -126,7 +133,7 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
       } else {
           // Si dice NO, inicia la búsqueda sin precio
           conversationState.set(userPhone, { ...currentStateData, state: 'SEARCHING' });
-          executeLocalAnalysisSearch(userPhone, currentStateData.data, conversationState);
+          executeWhatsAppSearch(userPhone, currentStateData.data, conversationState);
       }
       return;
   }
@@ -150,15 +157,66 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
   }
   // Selección de producto de la lista (después del análisis)
   else if (action === 'select_product') {
-    // ... (lógica sin cambios) ...
+    const product = results?.find(p => p.product_id == payload);
+    if (!product) return;
+    await sendTextMessage(userPhone, `Buscando detalles para *${product.title}*...`);
+    try {
+      const enrichedProduct = await getEnrichedProductDetails(collectionId, payload);
+      if (!enrichedProduct) throw new Error("Producto no enriquecido.");
+      const updatedResults = results.map(p => p.product_id == payload ? enrichedProduct : p);
+      conversationState.set(userPhone, { ...currentStateData, results: updatedResults });
+      const buttons = [
+        { type: 'reply', reply: { id: `show_details:${payload}`, title: 'Pros y Contras' } },
+        { type: 'reply', reply: { id: `show_stores:${payload}`, title: 'Opciones de Compra' } },
+        { type: 'reply', reply: { id: `show_features:${payload}`, title: 'Características' } },
+      ];
+      await sendReplyButtonsMessage(userPhone, `¡Listo! Seleccionaste: *${product.title}*.\n\n¿Qué te gustaría ver?`, buttons.slice(0,3));
+    } catch (error) {
+       console.error("Error al obtener detalles inmersivos:", error);
+       await sendTextMessage(userPhone, "Lo siento, no pude obtener los detalles completos para este producto.");
+     }
   }
   // Acciones para mostrar detalles específicos
   else if (action.startsWith('show_')) {
-     // ... (lógica sin cambios) ...
+     const product = Array.isArray(results) ? results.find(p => p.product_id == payload) : null;
+     if (!product) { await sendTextMessage(userPhone, "Hubo un problema. Por favor, selecciona el producto de nuevo."); return; }
+
+     if (action === 'show_details') {
+         let detailsText = `*Análisis para ${product.title}*:\n\n*✅ PROS:*\n${product.pros?.map(p => `- ${p}`).join('\n') || "No disponibles"}\n\n*❌ CONTRAS:*\n${product.contras?.map(c => `- ${c}`).join('\n') || "No disponibles"}`;
+         await sendTextMessage(userPhone, detailsText);
+     }
+     else if (action === 'show_stores') {
+         let storesText = `*Opciones de Compra para ${product.title}:*\n\n`;
+         const stores = product.immersive_details?.stores;
+         if (stores && Array.isArray(stores) && stores.length > 0) {
+           stores.forEach((store, index) => {
+             storesText += `*${index + 1}. ${store.name || 'Tienda desconocida'}*\n`;
+             storesText += `   Precio: *${store.price || 'No disponible'}*\n`;
+             storesText += `   Ver: ${store.link || 'No disponible'}\n\n`;
+           });
+         } else { storesText = "Lo siento, no encontré opciones de compra específicas."; }
+         await sendTextMessage(userPhone, storesText);
+     }
+     else if (action === 'show_features') {
+         let featuresText = `*Características de ${product.title}:*\n\n`;
+         const features = product.immersive_details?.about_the_product?.features;
+         if(features && Array.isArray(features) && features.length > 0) {
+             features.forEach(feature => {
+                 featuresText += `*${feature.title || 'Característica'}*: ${feature.value || 'No disponible'}\n`;
+             });
+         } else { featuresText = "Lo siento, no encontré características detalladas."; }
+         await sendTextMessage(userPhone, featuresText);
+     }
+     await setClosingState();
   }
   // Acciones después de ver detalles
   else if (action === 'post_action') {
-    // ... (lógica sin cambios) ...
+    if (payload === 'new_search') {
+        handleGreeting(userPhone, userPhone);
+    } else if (payload === 'end') {
+        await sendTextMessage(userPhone, "¡De nada! Estoy aquí si necesitas algo más. 😊");
+        conversationState.delete(userPhone);
+    }
   }
 }
 
@@ -200,7 +258,12 @@ export async function handleWhatsAppWebhook(req, res) {
 
     // Manejo del cierre explícito
     if (currentStateData.state === 'AWAITING_CLOSING' || currentStateData.state === 'AWAITING_POST_DETAIL_ACTION') {
-       // ... (lógica de cierre sin cambios) ...
+       const negativeKeywords = ['no', 'gracias', 'nada mas', 'eso es todo', 'chau'];
+        if (negativeKeywords.some(keyword => userText.toLowerCase().includes(keyword))) {
+            await sendTextMessage(userPhone, "¡De nada! Estoy aquí si necesitas algo más. 😊");
+            conversationState.delete(userPhone);
+            return;
+        }
        handleGreeting(userPhone, userPhone);
        return;
     }
@@ -240,7 +303,7 @@ export async function handleWhatsAppWebhook(req, res) {
             const priceData = parsePriceFromText(userText.toLowerCase());
             const searchDataWithPrice = { ...currentSearchData, ...priceData };
             conversationState.set(userPhone, { state: 'SEARCHING', data: searchDataWithPrice });
-            executeLocalAnalysisSearch(userPhone, searchDataWithPrice, conversationState);
+            executeWhatsAppSearch(userPhone, searchDataWithPrice, conversationState);
             break;
         
         default: // GREETING (PASO 1)
@@ -256,7 +319,7 @@ export async function handleWhatsAppWebhook(req, res) {
                     category: 'default' 
                 };
                 conversationState.set(userPhone, { state: 'SEARCHING', data: directSearchData });
-                executeLocalAnalysisSearch(userPhone, directSearchData, conversationState);
+                executeWhatsAppSearch(userPhone, directSearchData, conversationState);
             }
             break;
     }
