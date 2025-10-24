@@ -35,16 +35,17 @@ export default async function handleSearchStream(req, res) {
         const { products: shoppingResults, totalResults } = await fetchGoogleShoppingResults(userId, userQuery, countryCode, languageCode, currency, minPrice, maxPrice);
         
         if (!shoppingResults || shoppingResults.length === 0) {
-            sendEvent({ error: "No se encontraron productos en Google Shopping." });
+            sendEvent({ error: "No se encontraron productos en Google Shopping. 🕵️‍♂️" });
             return res.end();
         }
+        sendEvent({ status: `Analizando ${totalResults} resultados con IA ✨` });
         let geminiAnalysis;
         let analysisTimeout;
         // 2. Analizar con Gemini para obtener la mejor recomendacióntry {
             // Inicia un temporizador que se ejecutará después de 30 segundos
         try{   
              analysisTimeout = setTimeout(() => {
-                sendEvent({ status: "El análisis está tomando un poco más de lo esperado. Seguimos trabajando en ello..." });
+                sendEvent({ status: "El análisis está tomando un poco más de lo esperado. Seguimos trabajando en ello. ⏱️" });
             }, 30000); // 30 segundos
 
             // Llama a la función de análisis
@@ -69,7 +70,7 @@ export default async function handleSearchStream(req, res) {
             productos: productosRecomendadosBase,
             total_results: totalResults,
         };
-        sendEvent({ status: "Guardando búsqueda y recomendación..." });
+        sendEvent({ status: "Guardando búsqueda y recomendación. 💾" });
        
          // 4. Primero, guardamos en Firebase y esperamos a que nos devuelva el ID de la búsqueda.
            const { id: searchId, createdAt } = await saveSearchToFirebase(userQuery, userId, finalRecommendation);
