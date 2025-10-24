@@ -39,10 +39,21 @@ export default async function handleSearchStream(req, res) {
             return res.end();
         }
 
-        // 2. Analizar con Gemini para obtener la mejor recomendación
-        sendEvent({ status: `Analizando ${totalResults} resultados con Gemini u OpenAI...`});
-        const geminiAnalysis  = await getBestRecommendationFromGemini(userQuery, shoppingResults);
-        
+       
+        // 2. Analizar con Gemini para obtener la mejor recomendacióntry {
+            // Inicia un temporizador que se ejecutará después de 30 segundos
+        try{   
+            analysisTimeout = setTimeout(() => {
+                sendEvent({ status: "El análisis está tomando un poco más de lo esperado. Seguimos trabajando en ello..." });
+            }, 30000); // 30 segundos
+
+            // Llama a la función de análisis
+            geminiAnalysis = await getBestRecommendationFromGemini(userQuery, shoppingResults);
+
+        } finally {
+            clearTimeout(analysisTimeout);
+        }
+
         if (!geminiAnalysis || !geminiAnalysis.productos_analisis) {
             sendEvent({ error: "No se pudo obtener un análisis válido de Gemini." });
             return res.end();
