@@ -38,12 +38,12 @@ export default async function handleSearchStream(req, res) {
             sendEvent({ error: "No se encontraron productos en Google Shopping." });
             return res.end();
         }
-
-       
+        let geminiAnalysis;
+        let analysisTimeout;
         // 2. Analizar con Gemini para obtener la mejor recomendacióntry {
             // Inicia un temporizador que se ejecutará después de 30 segundos
         try{   
-            analysisTimeout = setTimeout(() => {
+             analysisTimeout = setTimeout(() => {
                 sendEvent({ status: "El análisis está tomando un poco más de lo esperado. Seguimos trabajando en ello..." });
             }, 30000); // 30 segundos
 
