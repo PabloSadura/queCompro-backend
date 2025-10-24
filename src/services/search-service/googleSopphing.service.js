@@ -38,7 +38,7 @@ export async function fetchGoogleShoppingResults(userId, userQuery, countryCode,
         google_domain:"google.com",
         currency: currency || 'ARS',
         tbs: RATING_FILTER_TBS,
-        api_key: process.env.SERPAPI_KEY1,
+        api_key: process.env.SERPAPI_KEY,
     };
     if (minPrice && !isNaN(minPrice)) params.min_price = minPrice;
     if (maxPrice && !isNaN(maxPrice)) params.max_price = maxPrice;

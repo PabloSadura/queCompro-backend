@@ -2,7 +2,7 @@ import axios from 'axios';
 
 export async function fetchImmersiveProductDetails(apiUrl) {
     
-    const apiKey  = process.env.SERPAPI_KEY1;
+    const apiKey  = process.env.SERPAPI_KEY;
     let finalUrl = apiUrl;
 
     if (!apiUrl) return null;

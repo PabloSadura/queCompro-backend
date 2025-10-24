@@ -138,23 +138,7 @@ async function handleInteractiveReply(userPhone, message, currentStateData) {
       return;
   }
 
-  // PASO 6: Respuesta a la confirmación de análisis IA
-  else if (state === 'AWAITING_AI_CONFIRMATION' && action === 'ai_confirm') {
-      if (payload === 'yes') {
-          executeAdvancedAIAnalysis(userPhone, currentStateData);
-      } else {
-          await sendTextMessage(userPhone, "Entendido. ¡Aquí tienes los mejores 5 productos de mi análisis rápido!");
-          const locallyAnalyzedProducts = currentStateData.results;
-          const rows = locallyAnalyzedProducts.slice(0, 5).map(prod => ({
-            id: `select_product:${prod.product_id}`,
-            title: prod.title.substring(0, 24),
-            description: `Precio: ${prod.price}`.substring(0, 72)
-          }));
-          conversationState.set(userPhone, { ...currentStateData, state: 'AWAITING_PRODUCT_SELECTION' });
-          await sendListMessage(userPhone, `Análisis Rápido`, "Resultados del análisis local:", "Ver Opciones", [{ title: "Productos (Análisis Rápido)", rows }]);
-      }
-      return;
-  }
+
   // Selección de producto de la lista (después del análisis)
   else if (action === 'select_product') {
     const product = results?.find(p => p.product_id == payload);
